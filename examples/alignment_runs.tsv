@@ -1,0 +1,8 @@
+anchor_id	species	chrom	start	end	ancestor	anc_chrom	anc_start	anc_end	strand	status	copy_id
+r1	chicken	chr4	1000	1200	avianAncestor	Anc4	5000	5200	+	unique	1
+r2	eagle	chr4	4300	4500	avianAncestor	Anc4	5000	5200	-	unique	1
+r3	pigeon	chr4	800	1000	avianAncestor	Anc4	5000	5200	+	unique	1
+r4	chicken	chr4	2000	2100	avianAncestor	Anc4	6000	6100	+	duplicated	1
+r5	chicken	chr7	3000	3100	avianAncestor	Anc4	6000	6100	+	duplicated	2
+r6	eagle	chr4	6000	6100	avianAncestor	Anc4	6000	6100	+	unique	1
+

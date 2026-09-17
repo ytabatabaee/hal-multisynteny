@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hal-multisynteny"
+version = "0.1.0"
+description = "Prototype ancestry-aware multi-genome synteny block construction for HAL alignments"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Yasamin Tabatabaee"}]
+keywords = ["comparative genomics", "synteny", "HAL", "Cactus", "phylogenetics"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+dev = ["build>=1", "pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+hal-multisynteny = "hal_multisynteny.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ytabatabaee/hal-multisynteny"
+Issues = "https://github.com/ytabatabaee/hal-multisynteny/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hal_multisynteny"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
