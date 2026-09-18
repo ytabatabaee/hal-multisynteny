@@ -1,0 +1,616 @@
+"""Deterministic reconciliation of two child block systems at one parent node."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from collections.abc import Iterable
+from dataclasses import dataclass
+from hashlib import sha256
+from itertools import pairwise
+
+from .models import ParentMappedRun
+
+CLASSIFICATIONS = (
+    "shared_consistent",
+    "left_only",
+    "right_only",
+    "orientation_conflict",
+    "order_conflict",
+    "duplication_conflict",
+    "ambiguous",
+    "unaligned",
+    "complex",
+)
+
+
+def _ids(records: Iterable[ParentMappedRun], attribute: str) -> str:
+    return ",".join(sorted({getattr(record, attribute) for record in records}))
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileConfig:
+    min_block_length: int = 50
+    boundary_tolerance: int = 1
+    max_merge_gap: int = 0
+    guide_tree_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.min_block_length < 1:
+            raise ValueError("min_block_length must be at least 1")
+        if self.boundary_tolerance < 0:
+            raise ValueError("boundary_tolerance must be non-negative")
+        if self.max_merge_gap < 0:
+            raise ValueError("max_merge_gap must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class AtomicInterval:
+    atomic_interval_id: str
+    parent_node: str
+    parent_chrom: str
+    parent_start: int
+    parent_end: int
+    left_record_ids: str
+    right_record_ids: str
+    left_block_ids: str
+    right_block_ids: str
+    classification: str
+    left_orientations: str
+    right_orientations: str
+    left_copies: str
+    right_copies: str
+    disposition: str
+    merge_reason: str
+    final_parent_block_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ParentBlock:
+    block_id: str
+    parent_node: str
+    parent_chrom: str
+    parent_start: int
+    parent_end: int
+    classification: str
+    left_block_ids: str
+    right_block_ids: str
+    species_count: int
+    occurrence_count: int
+    copy_count: int
+    mapping_quality: str
+    atomic_interval_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class ReconciledOccurrence:
+    block_id: str
+    occurrence_id: str
+    species: str
+    chrom: str
+    start: int
+    end: int
+    strand: str
+    copy_id: str
+    status: str
+    ancestor: str
+    anc_chrom: str
+    anc_start: int
+    anc_end: int
+    source_anchor_id: str
+    child_side: str
+    child_node: str
+    child_block_id: str
+    child_occurrence_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProvenanceRecord:
+    parent_block_id: str
+    child_side: str
+    child_node: str
+    child_block_id: str
+    child_occurrence_id: str
+    source_anchor_id: str
+    relationship: str
+
+
+@dataclass(frozen=True, slots=True)
+class ConflictRecord:
+    parent_node: str
+    parent_chrom: str
+    parent_start: int
+    parent_end: int
+    conflict_type: str
+    left_block_ids: str
+    right_block_ids: str
+    left_copies: str
+    right_copies: str
+    explanation: str
+    resolution: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileResult:
+    blocks: tuple[ParentBlock, ...]
+    occurrences: tuple[ReconciledOccurrence, ...]
+    atomic_intervals: tuple[AtomicInterval, ...]
+    provenance: tuple[ProvenanceRecord, ...]
+    conflicts: tuple[ConflictRecord, ...]
+    input_records: int
+    splits: int
+    merges: int
+    warnings: tuple[str, ...]
+
+
+@dataclass(slots=True)
+class _Atom:
+    chrom: str
+    start: int
+    end: int
+    left: tuple[ParentMappedRun, ...]
+    right: tuple[ParentMappedRun, ...]
+    classification: str
+    retained: bool
+    block_id: str = ""
+
+
+def _record_sort_key(record: ParentMappedRun) -> tuple[object, ...]:
+    return (
+        record.parent_start,
+        record.parent_end,
+        record.child_node,
+        record.child_block_id,
+        record.child_occurrence_id,
+        record.species,
+        record.chrom,
+        record.start,
+        record.end,
+        record.copy_id,
+        record.source_anchor_id,
+    )
+
+
+def _order_conflicts(runs: Iterable[ParentMappedRun]) -> set[tuple[str, str, str, str]]:
+    grouped: dict[tuple[str, str, str, str], list[ParentMappedRun]] = defaultdict(list)
+    for run in runs:
+        grouped[(run.child_node, run.child_block_id, run.child_occurrence_id, run.copy_id)].append(run)
+    conflicts: set[tuple[str, str, str, str]] = set()
+    for key, group in grouped.items():
+        ordered = sorted(group, key=lambda r: (r.parent_chrom, r.parent_start, r.parent_end))
+        if len({run.parent_chrom for run in ordered}) > 1 or len({run.chrom for run in ordered}) > 1:
+            conflicts.add(key)
+            continue
+        for previous, current in pairwise(ordered):
+            monotonic = (
+                previous.end <= current.start
+                if previous.strand == current.strand == "+"
+                else current.end <= previous.start
+                if previous.strand == current.strand == "-"
+                else False
+            )
+            if not monotonic:
+                conflicts.add(key)
+                break
+    return conflicts
+
+
+def _copy_resolution(records: tuple[ParentMappedRun, ...]) -> tuple[set[str], bool]:
+    usable = [record for record in records if record.status not in {"ambiguous", "unaligned"}]
+    copies = {record.copy_id for record in usable}
+    unique_by_copy = len(copies) == len(usable)
+    return copies, unique_by_copy
+
+
+def _classify(
+    left: tuple[ParentMappedRun, ...],
+    right: tuple[ParentMappedRun, ...],
+    order_conflicts: set[tuple[str, str, str, str]],
+) -> str:
+    all_records = left + right
+    usable_left = tuple(record for record in left if record.status not in {"ambiguous", "unaligned"})
+    usable_right = tuple(record for record in right if record.status not in {"ambiguous", "unaligned"})
+    if any(record.status == "unaligned" for record in all_records) and (
+        not usable_left or not usable_right
+    ):
+        return "unaligned"
+    if any(record.status == "ambiguous" for record in all_records):
+        return "ambiguous"
+    if not usable_left and not usable_right:
+        return "unaligned"
+    if usable_left and not usable_right:
+        return "left_only"
+    if usable_right and not usable_left:
+        return "right_only"
+
+    conflict_types: list[str] = []
+    left_orientations = {record.strand for record in usable_left}
+    right_orientations = {record.strand for record in usable_right}
+    if left_orientations != right_orientations or len(left_orientations) != 1:
+        conflict_types.append("orientation_conflict")
+    if any(
+        (record.child_node, record.child_block_id, record.child_occurrence_id, record.copy_id)
+        in order_conflicts
+        for record in usable_left + usable_right
+    ):
+        conflict_types.append("order_conflict")
+    left_copies, left_unique = _copy_resolution(usable_left)
+    right_copies, right_unique = _copy_resolution(usable_right)
+    has_candidates = len(usable_left) > 1 or len(usable_right) > 1
+    copies_resolve = left_unique and right_unique and left_copies == right_copies
+    if has_candidates and not copies_resolve:
+        conflict_types.append("duplication_conflict")
+    if len(conflict_types) > 1:
+        return "complex"
+    return conflict_types[0] if conflict_types else "shared_consistent"
+
+
+def _sweep_chromosome(
+    chrom: str,
+    left: list[ParentMappedRun],
+    right: list[ParentMappedRun],
+    config: ReconcileConfig,
+    order_conflicts: set[tuple[str, str, str, str]],
+) -> list[_Atom]:
+    records = [("left", record) for record in left] + [("right", record) for record in right]
+    boundaries = sorted({point for _, record in records for point in (record.parent_start, record.parent_end)})
+    starts: dict[int, list[tuple[str, ParentMappedRun]]] = defaultdict(list)
+    ends: dict[int, list[tuple[str, ParentMappedRun]]] = defaultdict(list)
+    for side, record in records:
+        starts[record.parent_start].append((side, record))
+        ends[record.parent_end].append((side, record))
+    active: dict[str, dict[tuple[str, str, str, str], ParentMappedRun]] = {
+        "left": {},
+        "right": {},
+    }
+    atoms: list[_Atom] = []
+    for start, end in pairwise(boundaries):
+        for side, record in ends[start]:
+            active[side].pop(record.record_id, None)
+        for side, record in starts[start]:
+            active[side][record.record_id] = record
+        left_active = tuple(sorted(active["left"].values(), key=_record_sort_key))
+        right_active = tuple(sorted(active["right"].values(), key=_record_sort_key))
+        if not left_active and not right_active:
+            continue
+        classification = _classify(left_active, right_active, order_conflicts)
+        atoms.append(
+            _Atom(
+                chrom,
+                start,
+                end,
+                left_active,
+                right_active,
+                classification,
+                end - start >= config.min_block_length,
+            )
+        )
+    return atoms
+
+
+def _membership(atom: _Atom) -> tuple[object, ...]:
+    def signature(records: tuple[ParentMappedRun, ...]) -> tuple[tuple[str, ...], ...]:
+        return tuple(
+            sorted(
+                (
+                    record.child_block_id,
+                    record.child_occurrence_id,
+                    record.species,
+                    record.chrom,
+                    record.strand,
+                    record.copy_id,
+                    record.status,
+                    record.source_anchor_id,
+                    str(record.start),
+                    str(record.end),
+                )
+                for record in records
+            )
+        )
+
+    return atom.classification, signature(atom.left), signature(atom.right)
+
+
+def _can_merge(previous: _Atom, current: _Atom, config: ReconcileConfig) -> bool:
+    if previous.chrom != current.chrom or current.start - previous.end > config.max_merge_gap:
+        return False
+    if _membership(previous) == _membership(current):
+        # Exact record membership makes descendant projections collinear and monotonic.
+        return all(
+            record.parent_start <= previous.start and record.parent_end >= current.end
+            for record in previous.left + previous.right
+        )
+    if (
+        previous.classification != current.classification
+        or current.start != previous.end
+        or min(previous.end - previous.start, current.end - current.start)
+        > config.boundary_tolerance
+    ):
+        return False
+
+    def side_is_collinear(
+        before: tuple[ParentMappedRun, ...], after: tuple[ParentMappedRun, ...]
+    ) -> bool:
+        def key(record: ParentMappedRun) -> tuple[str, ...]:
+            return (
+                record.species,
+                record.chrom,
+                record.strand,
+                record.copy_id,
+                record.status,
+            )
+
+        before_by_key = {key(record): record for record in before}
+        after_by_key = {key(record): record for record in after}
+        if len(before_by_key) != len(before) or len(after_by_key) != len(after):
+            return False
+        if before_by_key.keys() != after_by_key.keys():
+            return False
+        for record_key, first in before_by_key.items():
+            second = after_by_key[record_key]
+            if first == second:
+                continue
+            if first.strand == "+" and first.end != second.start:
+                return False
+            if first.strand == "-" and second.end != first.start:
+                return False
+        return True
+
+    return side_is_collinear(previous.left, current.left) and side_is_collinear(
+        previous.right, current.right
+    )
+
+
+def _mapping_quality(records: Iterable[ParentMappedRun]) -> str:
+    statuses = {record.status for record in records}
+    if "unaligned" in statuses:
+        return "unaligned"
+    if "ambiguous" in statuses:
+        return "ambiguous"
+    if "duplicated" in statuses:
+        return "duplicated"
+    return "unique"
+
+
+def _relationship(record: ParentMappedRun, atoms: list[_Atom], merged: bool) -> str:
+    if record.status in {"duplicated", "ambiguous", "unaligned"}:
+        return record.status
+    covered = sum(
+        atom.end - atom.start
+        for atom in atoms
+        if record in atom.left or record in atom.right
+    )
+    if covered < record.parent_end - record.parent_start:
+        return "partial"
+    if merged:
+        return "merged"
+    containing = sum(record in atom.left or record in atom.right for atom in atoms)
+    return "split" if containing > 1 else "preserved"
+
+
+def reconcile_node(
+    left_runs: list[ParentMappedRun],
+    right_runs: list[ParentMappedRun],
+    *,
+    parent_node: str,
+    left_node: str,
+    right_node: str,
+    config: ReconcileConfig | None = None,
+) -> ReconcileResult:
+    """Reconcile two child systems already mapped into one common parent."""
+    config = config or ReconcileConfig()
+    all_runs = left_runs + right_runs
+    if any(run.parent_node != parent_node for run in all_runs):
+        found = sorted({run.parent_node for run in all_runs})
+        raise ValueError(f"all runs must use requested parent node {parent_node!r}; found {found}")
+    if any(run.child_node != left_node for run in left_runs):
+        raise ValueError(f"left input contains records not from left node {left_node!r}")
+    if any(run.child_node != right_node for run in right_runs):
+        raise ValueError(f"right input contains records not from right node {right_node!r}")
+    record_ids = [run.record_id for run in all_runs]
+    if len(record_ids) != len(set(record_ids)):
+        raise ValueError("duplicate record identity (child node/block/occurrence/source anchor)")
+
+    order_conflicts = _order_conflicts(all_runs)
+    by_chrom: dict[str, dict[str, list[ParentMappedRun]]] = defaultdict(
+        lambda: {"left": [], "right": []}
+    )
+    for run in left_runs:
+        by_chrom[run.parent_chrom]["left"].append(run)
+    for run in right_runs:
+        by_chrom[run.parent_chrom]["right"].append(run)
+    atoms: list[_Atom] = []
+    for chrom in sorted(by_chrom):
+        sides = by_chrom[chrom]
+        atoms.extend(
+            _sweep_chromosome(chrom, sides["left"], sides["right"], config, order_conflicts)
+        )
+
+    groups: list[list[_Atom]] = []
+    for atom in atoms:
+        if not atom.retained:
+            continue
+        if groups and _can_merge(groups[-1][-1], atom, config):
+            groups[-1].append(atom)
+        else:
+            groups.append([atom])
+
+    blocks: list[ParentBlock] = []
+    occurrences: list[ReconciledOccurrence] = []
+    provenance: list[ProvenanceRecord] = []
+    for index, group in enumerate(groups, start=1):
+        block_id = f"HMSP{index:08d}"
+        for atom in group:
+            atom.block_id = block_id
+        records = tuple(
+            sorted({record for atom in group for record in atom.left + atom.right}, key=_record_sort_key)
+        )
+        deduplicated: dict[tuple[object, ...], list[ParentMappedRun]] = defaultdict(list)
+        for record in records:
+            side = "left" if record in left_runs else "right"
+            key = (
+                side,
+                record.child_node,
+                record.child_block_id,
+                record.child_occurrence_id,
+                record.species,
+                record.chrom,
+                record.start,
+                record.end,
+                record.strand,
+                record.copy_id,
+                record.status,
+            )
+            deduplicated[key].append(record)
+        for occurrence_index, (key, source_records) in enumerate(sorted(deduplicated.items()), start=1):
+            (
+                side,
+                child_node,
+                child_block_id,
+                child_occurrence_id,
+                species,
+                chrom,
+                start,
+                end,
+                strand,
+                copy_id,
+                status,
+            ) = key
+            anchors = ",".join(sorted({record.source_anchor_id for record in source_records}))
+            occurrences.append(
+                ReconciledOccurrence(
+                    block_id,
+                    f"{block_id}.{occurrence_index}",
+                    species,
+                    chrom,
+                    start,
+                    end,
+                    strand,
+                    copy_id,
+                    status,
+                    parent_node,
+                    group[0].chrom,
+                    group[0].start,
+                    group[-1].end,
+                    anchors,
+                    side,
+                    child_node,
+                    child_block_id,
+                    child_occurrence_id,
+                )
+            )
+        block_occurrences = [occurrence for occurrence in occurrences if occurrence.block_id == block_id]
+        blocks.append(
+            ParentBlock(
+                block_id,
+                parent_node,
+                group[0].chrom,
+                group[0].start,
+                group[-1].end,
+                group[0].classification,
+                _ids((record for atom in group for record in atom.left), "child_block_id"),
+                _ids((record for atom in group for record in atom.right), "child_block_id"),
+                len({occurrence.species for occurrence in block_occurrences}),
+                len(block_occurrences),
+                len({(occurrence.species, occurrence.copy_id) for occurrence in block_occurrences}),
+                _mapping_quality(records),
+                len(group),
+            )
+        )
+        for record in records:
+            side = "left" if record in left_runs else "right"
+            provenance.append(
+                ProvenanceRecord(
+                    block_id,
+                    side,
+                    record.child_node,
+                    record.child_block_id,
+                    record.child_occurrence_id,
+                    record.source_anchor_id,
+                    _relationship(record, group, len(group) > 1),
+                )
+            )
+
+    atomic_rows: list[AtomicInterval] = []
+    for index, atom in enumerate(atoms, start=1):
+        merged = bool(atom.block_id and next(b for b in blocks if b.block_id == atom.block_id).atomic_interval_count > 1)
+        atomic_rows.append(
+            AtomicInterval(
+                f"ATOM{index:08d}",
+                parent_node,
+                atom.chrom,
+                atom.start,
+                atom.end,
+                _ids(atom.left, "source_anchor_id"),
+                _ids(atom.right, "source_anchor_id"),
+                _ids(atom.left, "child_block_id"),
+                _ids(atom.right, "child_block_id"),
+                atom.classification,
+                _ids(atom.left, "strand"),
+                _ids(atom.right, "strand"),
+                _ids(atom.left, "copy_id"),
+                _ids(atom.right, "copy_id"),
+                "filtered" if not atom.retained else "merged" if merged else "retained",
+                "below_min_block_length"
+                if not atom.retained
+                else "identical evidence; collinear monotonic projections"
+                if merged
+                else "not_merged",
+                atom.block_id,
+            )
+        )
+
+    explanations = {
+        "orientation_conflict": "child support has incompatible parent-relative orientations",
+        "order_conflict": "a child occurrence is non-collinear, non-monotonic, or changes chromosome",
+        "duplication_conflict": "candidate copies cannot be paired uniquely by copy identity",
+        "ambiguous": "input mapping is explicitly ambiguous",
+        "unaligned": "one or both sides have explicit unaligned evidence or no usable mapping",
+        "complex": "multiple conflict conditions occur in the same atomic interval",
+    }
+    conflicts = tuple(
+        ConflictRecord(
+            parent_node,
+            atom.chrom,
+            atom.start,
+            atom.end,
+            atom.classification,
+            _ids(atom.left, "child_block_id"),
+            _ids(atom.right, "child_block_id"),
+            _ids(atom.left, "copy_id"),
+            _ids(atom.right, "copy_id"),
+            explanations[atom.classification],
+            "unresolved",
+        )
+        for atom in atoms
+        if atom.classification in explanations
+    )
+    split_records = sum(
+        1
+        for record in all_runs
+        if sum(record in atom.left or record in atom.right for atom in atoms if atom.retained) > 1
+    )
+    warnings = (
+        (
+            "boundary tolerance is used only when evaluating near-boundary compatibility; "
+            "the exact atomic partition is unchanged"
+        ),
+    )
+    return ReconcileResult(
+        tuple(blocks),
+        tuple(occurrences),
+        tuple(atomic_rows),
+        tuple(sorted(provenance, key=lambda row: (
+            row.parent_block_id, row.child_side, row.child_node, row.child_block_id,
+            row.child_occurrence_id, row.source_anchor_id,
+        ))),
+        conflicts,
+        len(all_runs),
+        split_records,
+        sum(max(0, len(group) - 1) for group in groups),
+        warnings,
+    )
+
+
+def checksum(path_bytes: bytes) -> str:
+    """Return a stable SHA-256 checksum for summary metadata."""
+    return sha256(path_bytes).hexdigest()

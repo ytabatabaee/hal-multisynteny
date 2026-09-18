@@ -1,0 +1,4 @@
+child_node	child_block_id	child_occurrence_id	species	chrom	start	end	parent_node	parent_chrom	parent_start	parent_end	strand	copy_id	status	source_anchor_id
+childB	B901	B901.eagle.1	eagle	chr4	4000	4100	avianAncestor	Anc4	5000	5100	+	1	unique	B-anchor-1
+childB	B902	B902.eagle.1	eagle	chr4	4100	4200	avianAncestor	Anc4	5100	5200	+	1	unique	B-anchor-2
+childB	B903	B903.eagle.1	eagle	chr7	5000	5100	avianAncestor	Anc4	5300	5400	+	1	unique	B-anchor-3

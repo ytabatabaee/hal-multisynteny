@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hal-multisynteny"
-version = "0.1.0"
+version = "0.2.0"
 description = "Prototype ancestry-aware multi-genome synteny block construction for HAL alignments"
 readme = "README.md"
 requires-python = ">=3.10"
