@@ -154,6 +154,15 @@ class _Atom:
     block_id: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class _ProjectedPiece:
+    record: ParentMappedRun
+    parent_start: int
+    parent_end: int
+    start: int
+    end: int
+
+
 def _record_sort_key(record: ParentMappedRun) -> tuple[object, ...]:
     return (
         record.parent_start,
@@ -168,6 +177,26 @@ def _record_sort_key(record: ParentMappedRun) -> tuple[object, ...]:
         record.copy_id,
         record.source_anchor_id,
     )
+
+
+def _project_run_to_parent_block(
+    record: ParentMappedRun, block_start: int, block_end: int
+) -> _ProjectedPiece:
+    overlap_start = max(record.parent_start, block_start)
+    overlap_end = min(record.parent_end, block_end)
+    if overlap_end <= overlap_start:
+        raise ValueError("cannot project an empty parent intersection")
+
+    if record.strand == "+":
+        child_start = record.start + (overlap_start - record.parent_start)
+        child_end = record.start + (overlap_end - record.parent_start)
+    else:
+        child_start = record.end - (overlap_end - record.parent_start)
+        child_end = record.end - (overlap_start - record.parent_start)
+
+    if child_end - child_start != overlap_end - overlap_start:
+        raise ValueError("projected child interval length does not match parent overlap")
+    return _ProjectedPiece(record, overlap_start, overlap_end, child_start, child_end)
 
 
 def _order_conflicts(runs: Iterable[ParentMappedRun]) -> set[tuple[str, str, str, str]]:
@@ -387,6 +416,104 @@ def _relationship(record: ParentMappedRun, atoms: list[_Atom], merged: bool) -> 
     return "split" if containing > 1 else "preserved"
 
 
+def _project_occurrences(
+    block_id: str,
+    block_start: int,
+    block_end: int,
+    records: tuple[ParentMappedRun, ...],
+    left_runs: list[ParentMappedRun],
+    parent_node: str,
+    parent_chrom: str,
+) -> list[ReconciledOccurrence]:
+    grouped: dict[tuple[object, ...], list[_ProjectedPiece]] = defaultdict(list)
+    for record in records:
+        side = "left" if record in left_runs else "right"
+        piece = _project_run_to_parent_block(record, block_start, block_end)
+        key = (
+            side,
+            record.child_node,
+            record.child_block_id,
+            record.child_occurrence_id,
+            record.species,
+            record.chrom,
+            record.strand,
+            record.copy_id,
+            record.status,
+        )
+        grouped[key].append(piece)
+
+    coalesced: list[tuple[tuple[object, ...], list[_ProjectedPiece]]] = []
+    for key, pieces in sorted(grouped.items()):
+        ordered = sorted(
+            pieces,
+            key=lambda piece: (
+                piece.parent_start,
+                piece.parent_end,
+                piece.start,
+                piece.end,
+                piece.record.source_anchor_id,
+            ),
+        )
+        for piece in ordered:
+            if not coalesced or coalesced[-1][0] != key:
+                coalesced.append((key, [piece]))
+                continue
+            previous = coalesced[-1][1][-1]
+            same_interval = (
+                previous.parent_start == piece.parent_start
+                and previous.parent_end == piece.parent_end
+                and previous.start == piece.start
+                and previous.end == piece.end
+            )
+            adjacent_in_parent = previous.parent_end == piece.parent_start
+            if piece.record.strand == "+":
+                adjacent_in_child = previous.end == piece.start
+            else:
+                adjacent_in_child = piece.end == previous.start
+            if same_interval or (adjacent_in_parent and adjacent_in_child):
+                coalesced[-1][1].append(piece)
+            else:
+                coalesced.append((key, [piece]))
+
+    occurrences: list[ReconciledOccurrence] = []
+    for occurrence_index, (key, pieces) in enumerate(coalesced, start=1):
+        (
+            side,
+            child_node,
+            child_block_id,
+            child_occurrence_id,
+            species,
+            chrom,
+            strand,
+            copy_id,
+            status,
+        ) = key
+        anchors = ",".join(sorted({piece.record.source_anchor_id for piece in pieces}))
+        occurrences.append(
+            ReconciledOccurrence(
+                block_id,
+                f"{block_id}.{occurrence_index}",
+                species,
+                chrom,
+                min(piece.start for piece in pieces),
+                max(piece.end for piece in pieces),
+                strand,
+                copy_id,
+                status,
+                parent_node,
+                parent_chrom,
+                block_start,
+                block_end,
+                anchors,
+                side,
+                child_node,
+                child_block_id,
+                child_occurrence_id,
+            )
+        )
+    return occurrences
+
+
 def reconcile_node(
     left_runs: list[ParentMappedRun],
     right_runs: list[ParentMappedRun],
@@ -444,60 +571,17 @@ def reconcile_node(
         records = tuple(
             sorted({record for atom in group for record in atom.left + atom.right}, key=_record_sort_key)
         )
-        deduplicated: dict[tuple[object, ...], list[ParentMappedRun]] = defaultdict(list)
-        for record in records:
-            side = "left" if record in left_runs else "right"
-            key = (
-                side,
-                record.child_node,
-                record.child_block_id,
-                record.child_occurrence_id,
-                record.species,
-                record.chrom,
-                record.start,
-                record.end,
-                record.strand,
-                record.copy_id,
-                record.status,
+        occurrences.extend(
+            _project_occurrences(
+                block_id,
+                group[0].start,
+                group[-1].end,
+                records,
+                left_runs,
+                parent_node,
+                group[0].chrom,
             )
-            deduplicated[key].append(record)
-        for occurrence_index, (key, source_records) in enumerate(sorted(deduplicated.items()), start=1):
-            (
-                side,
-                child_node,
-                child_block_id,
-                child_occurrence_id,
-                species,
-                chrom,
-                start,
-                end,
-                strand,
-                copy_id,
-                status,
-            ) = key
-            anchors = ",".join(sorted({record.source_anchor_id for record in source_records}))
-            occurrences.append(
-                ReconciledOccurrence(
-                    block_id,
-                    f"{block_id}.{occurrence_index}",
-                    species,
-                    chrom,
-                    start,
-                    end,
-                    strand,
-                    copy_id,
-                    status,
-                    parent_node,
-                    group[0].chrom,
-                    group[0].start,
-                    group[-1].end,
-                    anchors,
-                    side,
-                    child_node,
-                    child_block_id,
-                    child_occurrence_id,
-                )
-            )
+        )
         block_occurrences = [occurrence for occurrence in occurrences if occurrence.block_id == block_id]
         blocks.append(
             ParentBlock(

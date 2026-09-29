@@ -7,7 +7,11 @@ import pytest
 from hal_multisynteny.cli import main
 from hal_multisynteny.io import PARENT_RUN_FIELDS, read_parent_runs, validate_parent_runs
 from hal_multisynteny.models import ParentMappedRun
-from hal_multisynteny.reconcile import ReconcileConfig, reconcile_node
+from hal_multisynteny.reconcile import (
+    ReconcileConfig,
+    _project_run_to_parent_block,
+    reconcile_node,
+)
 
 
 def mapped(
@@ -61,6 +65,21 @@ def classifications(result):
     return [atom.classification for atom in result.atomic_intervals]
 
 
+def test_project_run_to_parent_block_slices_child_coordinates():
+    forward = mapped("left", "L", "l", 0, 100, start=1000)
+    forward_piece = _project_run_to_parent_block(forward, 25, 75)
+    assert (forward_piece.start, forward_piece.end) == (1025, 1075)
+    assert forward_piece.end - forward_piece.start == forward_piece.parent_end - forward_piece.parent_start
+
+    reverse = mapped("left", "L", "l", 0, 100, start=1000, strand="-")
+    reverse_piece = _project_run_to_parent_block(reverse, 25, 75)
+    assert (reverse_piece.start, reverse_piece.end) == (1025, 1075)
+    assert reverse_piece.end - reverse_piece.start == reverse_piece.parent_end - reverse_piece.parent_start
+
+    with pytest.raises(ValueError, match="empty parent intersection"):
+        _project_run_to_parent_block(forward, 100, 125)
+
+
 def test_identical_and_unrelated_labels_are_shared():
     for right_block in ("same", "completely-unrelated"):
         result = reconcile(
@@ -107,6 +126,51 @@ def test_split_and_merge_relationships_are_preserved():
         [mapped("right", "R", "r", 0, 100)],
     )
     assert len(swapped.blocks) == 2
+
+
+def test_split_parent_blocks_project_occurrence_coordinates():
+    result = reconcile(
+        [mapped("left", "L", "l", 0, 100, start=1000)],
+        [
+            mapped("right", "R1", "r1", 0, 50),
+            mapped("right", "R2", "r2", 50, 100),
+        ],
+    )
+    left_occurrences = [row for row in result.occurrences if row.child_side == "left"]
+    assert [(row.anc_start, row.anc_end, row.start, row.end) for row in left_occurrences] == [
+        (0, 50, 1000, 1050),
+        (50, 100, 1050, 1100),
+    ]
+
+
+def test_split_parent_blocks_project_reverse_strand_occurrence_coordinates():
+    result = reconcile(
+        [mapped("left", "L", "l", 0, 100, start=1000, strand="-")],
+        [
+            mapped("right", "R1", "r1", 0, 50, start=1050, strand="-"),
+            mapped("right", "R2", "r2", 50, 100, start=1000, strand="-"),
+        ],
+    )
+    left_occurrences = [row for row in result.occurrences if row.child_side == "left"]
+    assert [(row.anc_start, row.anc_end, row.start, row.end) for row in left_occurrences] == [
+        (0, 50, 1050, 1100),
+        (50, 100, 1000, 1050),
+    ]
+
+
+def test_projected_pieces_with_internal_child_gap_are_not_silently_spanned():
+    result = reconcile(
+        [
+            mapped("left", "L", "l", 0, 50, start=1000, anchor="left-a"),
+            mapped("left", "L", "l", 0, 50, start=1060, anchor="left-b"),
+        ],
+        [mapped("right", "R", "r", 0, 50)],
+    )
+    left_occurrences = [row for row in result.occurrences if row.child_side == "left"]
+    assert [(row.start, row.end, row.source_anchor_id) for row in left_occurrences] == [
+        (1000, 1050, "left-a"),
+        (1060, 1110, "left-b"),
+    ]
 
 
 def test_inversion_is_orientation_conflict_and_prevents_merge():
