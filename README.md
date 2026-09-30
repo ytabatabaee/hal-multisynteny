@@ -96,10 +96,13 @@ label may appear in many species; repeated use by species A, B, and C means
 those species carry evidence for the same family, not three duplicate copies.
 Duplicated candidates can resolve only when no species has more than one active
 occurrence assigned to the same global family, the side-level active copy-family
-sets match, and orientation/order checks are compatible. The current policy is
-conservative: it does not infer orthology when global labels are incomplete,
-contradictory, or absent, and it does not require every species to carry every
-family.
+sets match, and orientation/order checks are compatible. A record marked
+`status=duplicated` requires explicit alternative-family representation before
+global resolution: a singleton observed family such as `{1}` remains
+`duplication_conflict`, even if the other child also carries family `1`. The
+current policy is conservative: it does not infer orthology when global labels
+are incomplete, contradictory, or absent, and it does not require every species
+to carry every family.
 
 Filtered atoms containing evidence are hard block boundaries. A retained atom on
 one side of a below-threshold interval never merges with a retained atom on the

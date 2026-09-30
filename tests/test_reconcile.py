@@ -1,5 +1,6 @@
 import csv
 import json
+import re
 from itertools import pairwise
 from pathlib import Path
 
@@ -474,6 +475,24 @@ def test_matching_global_copy_ids_can_resolve_duplication():
     assert len(result.occurrences) == 4
 
 
+def test_singleton_duplicated_global_copy_id_does_not_resolve_against_unique():
+    left = [mapped("left", "L", "l1", 0, 100, copy="1", status="duplicated")]
+    right = [mapped("right", "R", "r1", 0, 100, copy="1", status="unique")]
+    result = reconcile(left, right, copy_id_scope="global")
+    assert classifications(result) == ["duplication_conflict"]
+    assert len(result.occurrences) == 2
+    assert len(result.provenance) == 2
+
+
+def test_singleton_duplicated_global_copy_id_on_both_sides_does_not_resolve():
+    left = [mapped("left", "L", "l1", 0, 100, copy="1", status="duplicated")]
+    right = [mapped("right", "R", "r1", 0, 100, copy="1", status="duplicated")]
+    result = reconcile(left, right, copy_id_scope="global")
+    assert classifications(result) == ["duplication_conflict"]
+    assert len(result.occurrences) == 2
+    assert len(result.provenance) == 2
+
+
 def test_multi_species_unique_support_is_not_duplication_under_local_scope():
     left, right = multi_species_internal_fixture()
     result = reconcile(left, right)
@@ -574,6 +593,7 @@ def test_global_copy_families_resolve_multi_species_duplication():
     assert classifications(result) == ["shared_consistent"]
     assert {row.copy_id for row in result.occurrences} == {"1", "2"}
     assert len(result.occurrences) == 8
+    assert len(result.provenance) == 8
 
 
 def test_repeated_global_copy_family_labels_across_species_are_permitted():
@@ -610,6 +630,37 @@ def test_global_copy_family_mismatch_remains_duplication_conflict():
     assert classifications(reconcile(left, right, copy_id_scope="global")) == [
         "duplication_conflict"
     ]
+
+
+def test_global_copy_family_subset_remains_duplication_conflict():
+    left = [
+        mapped("left", "L", "lA1", 0, 100, species="A", copy="1", status="duplicated"),
+        mapped("left", "L", "lA2", 0, 100, species="A", copy="2", status="duplicated", start=200),
+    ]
+    right = [mapped("right", "R", "rD1", 0, 100, species="D", copy="1")]
+    result = reconcile(left, right, copy_id_scope="global")
+    assert classifications(result) == ["duplication_conflict"]
+    assert len(result.occurrences) == 3
+
+
+def test_repeated_species_occurrences_in_one_global_family_remain_duplication_conflict():
+    left = [
+        mapped("left", "L", "lA1", 0, 100, species="A", copy="1"),
+        mapped("left", "L", "lA2", 0, 100, species="A", copy="1", start=200),
+    ]
+    right = [mapped("right", "R", "rD1", 0, 100, species="D", copy="1")]
+    result = reconcile(left, right, copy_id_scope="global")
+    assert classifications(result) == ["duplication_conflict"]
+    assert len(result.occurrences) == 3
+
+
+def test_incomplete_global_duplication_plus_orientation_conflict_is_complex():
+    left = [mapped("left", "L", "l1", 0, 100, copy="1", status="duplicated")]
+    right = [mapped("right", "R", "r1", 0, 100, copy="1", strand="-")]
+    result = reconcile(left, right, copy_id_scope="global")
+    assert classifications(result) == ["complex"]
+    assert len(result.occurrences) == 2
+    assert len(result.provenance) == 2
 
 
 def test_duplication_plus_orientation_conflict_is_complex():
@@ -884,15 +935,25 @@ def test_release_integrity_files_and_documentation():
     consistency_doc = root / "docs" / "HALSYNTENY_CONSISTENCY.md"
     workflow = root / ".github" / "workflows" / "tests.yml"
     readme = (root / "README.md").read_text(encoding="utf-8")
+    workflow_text = workflow.read_text(encoding="utf-8") if workflow.exists() else ""
     pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert consistency_doc.exists()
-    assert workflow.exists()
-    assert (root / "docs/HALSYNTENY_CONSISTENCY.md").exists()
-    assert "[`docs/HALSYNTENY_CONSISTENCY.md`](docs/HALSYNTENY_CONSISTENCY.md)" in readme
-    assert "--copy-id-scope local" in readme
-    assert "--copy-id-scope global" in readme
+    assert consistency_doc.exists(), "missing docs/HALSYNTENY_CONSISTENCY.md"
+    assert workflow.exists(), "missing .github/workflows/tests.yml"
+    links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", readme)
+    assert "docs/HALSYNTENY_CONSISTENCY.md" in links, (
+        "README does not link to docs/HALSYNTENY_CONSISTENCY.md"
+    )
+    assert (root / "docs/HALSYNTENY_CONSISTENCY.md").exists(), (
+        "README consistency-document link does not resolve"
+    )
+    for version in ("3.10", "3.11", "3.12"):
+        assert version in workflow_text, f"workflow does not include Python {version}"
+    for command in ("python -m ruff check .", "python -m pytest -q", "python -m build"):
+        assert command in workflow_text, f"workflow does not run {command}"
+    assert "--copy-id-scope local" in readme, "README does not document local copy scope"
+    assert "--copy-id-scope global" in readme, "README does not document global copy scope"
     assert 'choices=("local", "global")' in (root / "src/hal_multisynteny/cli.py").read_text(
         encoding="utf-8"
-    )
-    assert 'version = "0.2.0"' in pyproject
+    ), "CLI parser does not expose both copy-id scopes"
+    assert 'version = "0.2.0"' in pyproject, "project version changed from 0.2.0"

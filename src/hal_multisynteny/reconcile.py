@@ -307,6 +307,9 @@ def _global_copy_ids_resolve(
 ) -> bool:
     if left_summary.repeated_copy_species or right_summary.repeated_copy_species:
         return False
+    for summary in (left_summary, right_summary):
+        if any(len(summary.copy_ids_by_species[species]) < 2 for species in summary.duplicated_species):
+            return False
     left_copies = set().union(*left_summary.copy_ids_by_species.values())
     right_copies = set().union(*right_summary.copy_ids_by_species.values())
     if not left_copies or not right_copies:
