@@ -1,6 +1,6 @@
 # Fake four-leaf pilot
 
-This example runs the 0.3.0 bottom-up tree runner without HAL tools. It is a
+This example runs the 0.3.1 bottom-up tree runner without HAL tools. It is a
 technical fixture for checkpointing, propagation, and deterministic traversal;
 it is not a biological block definition.
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hal-multisynteny"
-version = "0.3.0"
+version = "0.3.1"
 description = "Prototype ancestry-aware multi-genome synteny block construction for HAL alignments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,6 +39,9 @@ packages = ["src/hal_multisynteny"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+  "hal: optional tests that require real HAL command-line tools",
+]
 
 [tool.ruff]
 line-length = 100

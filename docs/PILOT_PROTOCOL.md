@@ -25,6 +25,7 @@ Template:
 ```bash
 hal-multisynteny hal-info \
   --hal alignment.hal \
+  --metadata-level basic \
   --output pilot-hal-info.json
 
 hal-multisynteny validate-tree \
@@ -55,3 +56,11 @@ duplication rates, and conflict counts.
 
 Do not use this as evidence of VGP-scale readiness. The first target is a small
 clade where checkpoints and conflicts can be inspected by hand.
+
+For version 0.3.1, real HAL extraction supports exact whole-interval BED
+mappings and conservative full-interval alternatives. Absent mappings are
+reported as nonspatial unresolved evidence. Arbitrary gapped reconstruction is
+not yet supported unless the HAL output preserves exact source subintervals, so
+tiny HAL fixtures for identity, inversion, deletion/unmapped intervals,
+duplication, and gapped mappings should pass before drawing biological
+conclusions from a bird or fish pilot.

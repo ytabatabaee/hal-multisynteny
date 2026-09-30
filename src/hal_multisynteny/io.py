@@ -18,6 +18,7 @@ from .models import (
     NodeBlock,
     NodeBlockOccurrence,
     ParentMappedRun,
+    UnmappedEdgeEvidence,
 )
 from .reconcile import (
     AtomicInterval,
@@ -111,6 +112,20 @@ EDGE_MAPPING_FIELDS = (
     "strand",
     "copy_id",
     "status",
+    "source_anchor_id",
+    "tool",
+    "command",
+)
+
+UNMAPPED_EDGE_FIELDS = (
+    "child_node",
+    "parent_node",
+    "child_block_id",
+    "child_chrom",
+    "child_start",
+    "child_end",
+    "status",
+    "reason",
     "source_anchor_id",
     "tool",
     "command",
@@ -490,3 +505,9 @@ def write_leaf_occurrences(path: str | Path, records: Iterable[LeafOccurrence]) 
 
 def write_edge_mapping_runs(path: str | Path, records: Iterable[EdgeMappingRun]) -> None:
     _write_dataclasses(path, records, list(EDGE_MAPPING_FIELDS))
+
+
+def write_unmapped_edge_evidence(
+    path: str | Path, records: Iterable[UnmappedEdgeEvidence]
+) -> None:
+    _write_dataclasses(path, records, list(UNMAPPED_EDGE_FIELDS))

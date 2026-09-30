@@ -1,7 +1,8 @@
 # Architecture
 
-Version 0.3.0 is the first HAL-backed bottom-up prototype. It keeps the v0.2
-single-node reconciler and adds a tree runner around it.
+Version 0.3.1 is the first HAL-backed bottom-up prototype with a focused
+correctness pass before real bird or fish pilots. It keeps the v0.2 single-node
+reconciler and adds a tree runner around it.
 
 The central invariant is that node coordinates, edge mappings, and leaf
 occurrences are separate records:
@@ -12,11 +13,18 @@ occurrences are separate records:
 - `LeafOccurrence` records an extant descendant interval plus the current node
   interval it represents.
 - `EdgeMappingRun` maps a child `NodeBlock` interval to the direct HAL parent.
+- `UnmappedEdgeEvidence` records a child interval that has no known parent
+  location. It is provenance and unresolved evidence, not a parent interval.
 
 Internal-node blocks are mapped upward by their internal HAL coordinates. The
 runner does not remap every extant leaf occurrence independently. Leaf
 occurrences are propagated only after sibling reconciliation determines which
 portion of each child block is represented in each parent block.
+
+Guide-tree node IDs and HAL genome names are separate throughout extraction.
+Traversal, edge-run tables, manifests, and checkpoint paths use logical node
+IDs. HAL subprocess arguments use the HAL genome names supplied by the node map.
+Tests deliberately use different logical and HAL names to verify this boundary.
 
 The workflow is:
 
@@ -28,6 +36,21 @@ The workflow is:
 6. reconcile siblings;
 7. write an atomic node checkpoint with node blocks, leaf occurrences,
    provenance, conflicts, edge runs, and a manifest.
+
+For the real HAL backend, extraction preflight runs before any node checkpoint is
+written or replaced. It verifies that every mapped HAL genome exists and that
+each direct child-to-parent guide-tree edge agrees with HAL ancestry. Failed
+preflight leaves existing checkpoints untouched.
+
+Only spatial `EdgeMappingRun` rows participate in parent-coordinate atomic
+sweeps. Nonspatial unmapped evidence is retained in checkpoint outputs and
+summaries, but it does not create an atomic interval and is not interpreted as
+biological absence.
+
+Leaf-occurrence orientation is composed across levels: `+` followed by `+` and
+`-` followed by `-` become `+`; mixed signs become `-`. This composes the
+orientation of the leaf relative to the child node with the orientation of the
+child block relative to the parent.
 
 This is a research prototype. Results are guide-tree dependent. HAL alignment
 transitivity does not guarantee interval or synteny-chain transitivity. Missing

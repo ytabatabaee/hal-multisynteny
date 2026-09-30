@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import __version__
 from .extract import EdgeExtractor, FakeEdgeExtractor, HalEdgeExtractor
+from .hal import inspect_hal
 from .io import (
     LEAF_SEED_FIELDS,
     read_leaf_occurrences,
@@ -25,10 +26,18 @@ from .io import (
     write_parent_blocks,
     write_provenance,
     write_summary,
+    write_unmapped_edge_evidence,
 )
-from .models import EdgeMappingRun, LeafOccurrence, NodeBlock, NodeBlockOccurrence
-from .reconcile import ReconcileConfig, ReconciledOccurrence, checksum, reconcile_node
+from .models import (
+    EdgeMappingRun,
+    LeafOccurrence,
+    NodeBlock,
+    NodeBlockOccurrence,
+    UnmappedEdgeEvidence,
+)
+from .reconcile import ReconcileConfig, ReconciledOccurrence, reconcile_node
 from .tree import TraversalPlan, build_traversal_plan
+from .utils import compose_strands, sha256_file
 
 
 class CheckpointError(RuntimeError):
@@ -64,7 +73,15 @@ def init_leaf_packages(
     tree_path: str | Path, node_map_path: str | Path, leaf_blocks: str | Path, output_dir: str | Path
 ) -> None:
     plan = build_traversal_plan(tree_path, node_map_path)
-    _init_leaf_packages_from_plan(plan, leaf_blocks, output_dir)
+    identity = {
+        "version": __version__,
+        "schema_version": "0.3.1",
+        "tree_sha256": plan.tree_sha256,
+        "node_map_sha256": plan.node_map_sha256,
+        "leaf_seed_sha256": sha256_file(Path(leaf_blocks) / "leaf_blocks.tsv"),
+        "backend": "leaf-init",
+    }
+    _init_leaf_packages_from_plan(plan, leaf_blocks, output_dir, False, identity)
 
 
 def run_tree(
@@ -75,15 +92,24 @@ def run_tree(
     output_dir: str | Path,
     config: RunTreeConfig,
 ) -> dict[str, object]:
-    plan = build_traversal_plan(tree_path, node_map_path)
+    hal_info: dict[str, object] | None = None
+    if config.backend == "hal" and not config.dry_run:
+        provisional_plan = build_traversal_plan(tree_path, node_map_path)
+        required = sorted(set(provisional_plan.node_to_hal.values()))
+        hal_info = inspect_hal(config.hal or "", required_genomes=required, metadata_level="basic")
+        plan = build_traversal_plan(tree_path, node_map_path, hal_info["parent_map"])
+    else:
+        plan = build_traversal_plan(tree_path, node_map_path)
     output = Path(output_dir)
     nodes_dir = output / "nodes"
+    identity = _run_identity(config, plan, leaf_blocks, hal_info)
     plan_payload = {
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
         "steps": [asdict(step) for step in plan.steps],
         "output_dir": str(output),
         "backend": config.backend,
+        "identity": identity,
     }
     if config.dry_run:
         output.mkdir(parents=True, exist_ok=True)
@@ -91,24 +117,44 @@ def run_tree(
         return plan_payload
 
     extractor = _build_extractor(config)
-    _init_leaf_packages_from_plan(plan, leaf_blocks, output)
+    _init_leaf_packages_from_plan(plan, leaf_blocks, output, config.resume, identity)
     packages = {
         node_id: load_package(nodes_dir / node_id, node_id, plan.node_to_hal[node_id])
         for node_id in plan.node_to_hal
         if (nodes_dir / node_id / "COMPLETE").exists()
     }
     forced = _forced_nodes(plan, config.force_node)
+    reused: list[str] = []
+    recomputed: list[str] = []
 
     for step in plan.steps:
         node_path = nodes_dir / step.node_id
-        parameters = _parameters(config, plan)
-        if config.resume and step.node_id not in forced and _can_reuse(node_path, parameters):
-            packages[step.node_id] = load_package(node_path, step.node_id, step.hal_genome)
-            continue
         left_package = packages[step.left_child]
         right_package = packages[step.right_child]
-        left_result = extractor.extract(step.left_child, step.node_id, left_package.blocks)
-        right_result = extractor.extract(step.right_child, step.node_id, right_package.blocks)
+        parameters = _parameters(config, plan, identity)
+        child_checksums = _child_manifest_checksums(step, left_package, right_package)
+        if (
+            config.resume
+            and step.node_id not in forced
+            and _can_reuse(node_path, parameters, child_checksums, identity)
+        ):
+            packages[step.node_id] = load_package(node_path, step.node_id, step.hal_genome)
+            reused.append(step.node_id)
+            continue
+        left_result = extractor.extract(
+            child_node_id=step.left_child,
+            parent_node_id=step.node_id,
+            child_hal_genome=step.left_hal_genome,
+            parent_hal_genome=step.hal_genome,
+            child_blocks=left_package.blocks,
+        )
+        right_result = extractor.extract(
+            child_node_id=step.right_child,
+            parent_node_id=step.node_id,
+            child_hal_genome=step.right_hal_genome,
+            parent_hal_genome=step.hal_genome,
+            child_blocks=right_package.blocks,
+        )
         left_runs = [run.to_parent_mapped_run() for run in left_result.runs]
         right_runs = [run.to_parent_mapped_run() for run in right_result.runs]
         result = reconcile_node(
@@ -162,8 +208,11 @@ def run_tree(
             right_package,
             left_result.runs,
             right_result.runs,
+            left_result.unmapped,
+            right_result.unmapped,
             left_result.tool_versions | right_result.tool_versions,
             result,
+            identity,
         )
         _write_internal_checkpoint(
             node_path,
@@ -173,9 +222,23 @@ def run_tree(
             result,
             left_result.runs,
             right_result.runs,
+            left_result.unmapped,
+            right_result.unmapped,
             manifest,
         )
         packages[step.node_id] = load_package(node_path, step.node_id, step.hal_genome)
+        recomputed.append(step.node_id)
+    _write_json_atomic(
+        output / "run-summary.json",
+        {
+            "version": __version__,
+            "schema_version": "0.3.1",
+            "identity": identity,
+            "reused_nodes": reused,
+            "recomputed_nodes": recomputed,
+            "hal_preflight": hal_info,
+        },
+    )
     return plan_payload
 
 
@@ -191,7 +254,13 @@ def load_package(path: str | Path, node_id: str, hal_genome: str) -> NodePackage
     return NodePackage(node_id, hal_genome, package_path, blocks, node_occurrences, leaf_occurrences, manifest)
 
 
-def _init_leaf_packages_from_plan(plan: TraversalPlan, leaf_blocks: str | Path, output_dir: str | Path) -> None:
+def _init_leaf_packages_from_plan(
+    plan: TraversalPlan,
+    leaf_blocks: str | Path,
+    output_dir: str | Path,
+    resume: bool,
+    identity: dict[str, object],
+) -> None:
     source = Path(leaf_blocks)
     rows = read_leaf_seed_blocks(source / "leaf_blocks.tsv")
     by_leaf: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -202,8 +271,12 @@ def _init_leaf_packages_from_plan(plan: TraversalPlan, leaf_blocks: str | Path, 
         if leaf not in by_leaf:
             raise CheckpointError(f"leaf seed blocks missing records for {leaf!r}")
         path = Path(output_dir) / "nodes" / leaf
-        if (path / "COMPLETE").exists():
-            continue
+        leaf_parameters = _leaf_parameters(plan, identity, leaf)
+        if (path / "COMPLETE").exists() and resume:
+            if _can_reuse(path, leaf_parameters, {}, identity):
+                continue
+        elif (path / "COMPLETE").exists() and not resume:
+            pass
         blocks: list[NodeBlock] = []
         node_occurrences: list[NodeBlockOccurrence] = []
         leaf_occurrences: list[LeafOccurrence] = []
@@ -242,13 +315,14 @@ def _init_leaf_packages_from_plan(plan: TraversalPlan, leaf_blocks: str | Path, 
             )
         manifest = {
             "version": __version__,
-            "schema_version": "0.3.0",
+            "schema_version": "0.3.1",
             "node_id": leaf,
             "hal_genome": plan.node_to_hal[leaf],
             "kind": "leaf",
-            "parameters": {},
             "tree_sha256": plan.tree_sha256,
             "node_map_sha256": plan.node_map_sha256,
+            "parameters": leaf_parameters,
+            "run_identity": identity,
             "warnings": [],
         }
         _write_leaf_checkpoint(path, tuple(blocks), tuple(node_occurrences), tuple(leaf_occurrences), manifest)
@@ -292,6 +366,22 @@ def _propagate_leaf_occurrences(
                     occurrence.anc_start,
                     occurrence.anc_end,
                 )
+            )
+            output[-1] = LeafOccurrence(
+                output[-1].block_id,
+                output[-1].occurrence_id,
+                output[-1].leaf,
+                output[-1].chrom,
+                output[-1].start,
+                output[-1].end,
+                compose_strands(projected.strand, occurrence.strand),
+                output[-1].copy_id,
+                output[-1].status,
+                output[-1].source,
+                output[-1].node,
+                output[-1].node_chrom,
+                output[-1].node_start,
+                output[-1].node_end,
             )
     return output
 
@@ -344,6 +434,8 @@ def _write_internal_checkpoint(
     result,
     left_runs: tuple[EdgeMappingRun, ...],
     right_runs: tuple[EdgeMappingRun, ...],
+    left_unmapped: tuple[UnmappedEdgeEvidence, ...],
+    right_unmapped: tuple[UnmappedEdgeEvidence, ...],
     manifest: dict[str, object],
 ) -> None:
     _write_checkpoint_files(path, {
@@ -356,26 +448,40 @@ def _write_internal_checkpoint(
         "conflicts.tsv": lambda p: write_conflicts(p, result.conflicts),
         "left_edge_runs.tsv": lambda p: write_edge_mapping_runs(p, left_runs),
         "right_edge_runs.tsv": lambda p: write_edge_mapping_runs(p, right_runs),
-        "summary.json": lambda p: write_summary(p, {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occurrences), "conflicts": len(result.conflicts)}),
+        "left_unmapped_edge_evidence.tsv": lambda p: write_unmapped_edge_evidence(p, left_unmapped),
+        "right_unmapped_edge_evidence.tsv": lambda p: write_unmapped_edge_evidence(p, right_unmapped),
+        "summary.json": lambda p: write_summary(p, {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occurrences), "conflicts": len(result.conflicts), "unmapped_edge_evidence": len(left_unmapped) + len(right_unmapped)}),
     }, manifest)
 
 
 def _write_checkpoint_files(path: Path, writers: dict[str, object], manifest: dict[str, object]) -> None:
     tmp = path.with_name(path.name + ".tmp")
+    backup = path.with_name(path.name + ".backup")
     if tmp.exists():
         shutil.rmtree(tmp)
+    if backup.exists():
+        shutil.rmtree(backup)
     tmp.mkdir(parents=True)
     for filename, writer in writers.items():
         writer(tmp / filename)
-    checksums = {filename: checksum((tmp / filename).read_bytes()) for filename in sorted(writers)}
+    checksums = {filename: sha256_file(tmp / filename) for filename in sorted(writers)}
     manifest = dict(manifest)
     manifest["output_checksums"] = checksums
     _write_json_atomic(tmp / "manifest.json", manifest)
-    checksums["manifest.json"] = checksum((tmp / "manifest.json").read_bytes())
+    checksums["manifest.json"] = sha256_file(tmp / "manifest.json")
     (tmp / "COMPLETE").write_text("complete\n", encoding="utf-8")
-    if path.exists():
-        shutil.rmtree(path)
-    tmp.replace(path)
+    try:
+        if path.exists():
+            path.replace(backup)
+        tmp.replace(path)
+    except OSError:
+        if path.exists():
+            shutil.rmtree(path)
+        if backup.exists():
+            backup.replace(path)
+        raise
+    if backup.exists():
+        shutil.rmtree(backup)
 
 
 def _manifest(
@@ -386,12 +492,15 @@ def _manifest(
     right_package: NodePackage,
     left_runs,
     right_runs,
+    left_unmapped,
+    right_unmapped,
     tool_versions: dict[str, str],
     result,
+    identity: dict[str, object],
 ) -> dict[str, object]:
     return {
         "version": __version__,
-        "schema_version": "0.3.0",
+        "schema_version": "0.3.1",
         "node_id": step.node_id,
         "hal_genome": step.hal_genome,
         "children": [step.left_child, step.right_child],
@@ -399,19 +508,66 @@ def _manifest(
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
         "input_checkpoint_checksums": {
-            step.left_child: checksum((left_package.path / "manifest.json").read_bytes()),
-            step.right_child: checksum((right_package.path / "manifest.json").read_bytes()),
+            step.left_child: sha256_file(left_package.path / "manifest.json"),
+            step.right_child: sha256_file(right_package.path / "manifest.json"),
         },
-        "parameters": _parameters(config, plan),
+        "parameters": _parameters(config, plan, identity),
+        "run_identity": identity,
         "extraction_backend": config.backend,
         "tool_versions": tool_versions,
         "edge_run_counts": {"left": len(left_runs), "right": len(right_runs)},
+        "unmapped_edge_counts": {"left": len(left_unmapped), "right": len(right_unmapped)},
         "unresolved_conflicts": len(result.conflicts),
         "warnings": list(result.warnings),
     }
 
 
-def _parameters(config: RunTreeConfig, plan: TraversalPlan) -> dict[str, object]:
+def _run_identity(
+    config: RunTreeConfig,
+    plan: TraversalPlan,
+    leaf_blocks: str | Path,
+    hal_info: dict[str, object] | None,
+) -> dict[str, object]:
+    leaf_seed = Path(leaf_blocks) / "leaf_blocks.tsv"
+    identity: dict[str, object] = {
+        "version": __version__,
+        "schema_version": "0.3.1",
+        "tree_sha256": plan.tree_sha256,
+        "node_map_sha256": plan.node_map_sha256,
+        "leaf_seed_sha256": sha256_file(leaf_seed) if leaf_seed.exists() else "",
+        "backend": config.backend,
+        "fake_mapping_sha256": sha256_file(config.fake_mappings) if config.fake_mappings else "",
+    }
+    if hal_info is not None:
+        identity["hal_sha256"] = hal_info.get("hal_sha256", "")
+        identity["hal_path"] = hal_info.get("hal_path", "")
+        identity["hal_tools"] = hal_info.get("tools", {})
+    return identity
+
+
+def _leaf_parameters(plan: TraversalPlan, identity: dict[str, object], leaf: str) -> dict[str, object]:
+    return {
+        "version": __version__,
+        "schema_version": "0.3.1",
+        "tree_sha256": plan.tree_sha256,
+        "node_map_sha256": plan.node_map_sha256,
+        "leaf": leaf,
+        "identity": identity,
+    }
+
+
+def _child_manifest_checksums(
+    step,
+    left_package: NodePackage,
+    right_package: NodePackage,
+) -> dict[str, str]:
+    return {
+        step.left_child: sha256_file(left_package.path / "manifest.json"),
+        step.right_child: sha256_file(right_package.path / "manifest.json"),
+    }
+
+
+def _parameters(config: RunTreeConfig, plan: TraversalPlan, identity: dict[str, object] | None = None) -> dict[str, object]:
     return {
         "min_block_length": config.min_block_length,
         "boundary_tolerance": config.boundary_tolerance,
@@ -420,15 +576,28 @@ def _parameters(config: RunTreeConfig, plan: TraversalPlan) -> dict[str, object]
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
         "version": __version__,
+        "schema_version": "0.3.1",
+        "identity": identity or {},
     }
 
 
-def _can_reuse(path: Path, parameters: dict[str, object]) -> bool:
+def _can_reuse(
+    path: Path,
+    parameters: dict[str, object],
+    child_manifest_checksums: dict[str, str],
+    identity: dict[str, object],
+) -> bool:
     if not (path / "COMPLETE").exists():
         return False
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("schema_version") not in {"0.3.1"}:
+        raise CheckpointError(f"stale checkpoint schema for {path}")
     if manifest.get("parameters") != parameters:
         raise CheckpointError(f"stale checkpoint parameters for {path}")
+    if manifest.get("run_identity", identity) != identity:
+        raise CheckpointError(f"stale checkpoint input identity for {path}")
+    if child_manifest_checksums and manifest.get("input_checkpoint_checksums") != child_manifest_checksums:
+        raise CheckpointError(f"stale child checkpoint identity for {path}")
     _validate_output_checksums(path, manifest)
     return True
 
@@ -438,7 +607,7 @@ def _validate_output_checksums(path: Path, manifest: dict[str, object]) -> None:
         target = path / filename
         if not target.exists():
             raise CheckpointError(f"checkpoint output is missing: {target}")
-        found = checksum(target.read_bytes())
+        found = sha256_file(target)
         if found != expected:
             raise CheckpointError(f"checksum mismatch for {target}")
 
@@ -446,13 +615,15 @@ def _validate_output_checksums(path: Path, manifest: dict[str, object]) -> None:
 def _forced_nodes(plan: TraversalPlan, force_node: str | None) -> set[str]:
     if force_node is None:
         return set()
-    forced: set[str] = set()
-    active = False
+    parent_by_child: dict[str, str] = {}
     for step in plan.steps:
-        if step.node_id == force_node or step.left_child in forced or step.right_child in forced:
-            active = True
-        if active:
-            forced.add(step.node_id)
+        parent_by_child[step.left_child] = step.node_id
+        parent_by_child[step.right_child] = step.node_id
+    forced: set[str] = {force_node}
+    current = force_node
+    while current in parent_by_child:
+        current = parent_by_child[current]
+        forced.add(current)
     return forced
 
 

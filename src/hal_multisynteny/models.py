@@ -258,3 +258,28 @@ class EdgeMappingRun:
             status=self.status,
             source_anchor_id=self.source_anchor_id,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class UnmappedEdgeEvidence:
+    """Nonspatial evidence that a child block did not map to the requested parent."""
+
+    child_node: str
+    parent_node: str
+    child_block_id: str
+    child_chrom: str
+    child_start: int
+    child_end: int
+    status: str
+    reason: str
+    source_anchor_id: str
+    tool: str = ""
+    command: str = ""
+
+    def __post_init__(self) -> None:
+        if self.child_start < 0 or self.child_end <= self.child_start:
+            raise ValueError("unmapped evidence child interval must be nonempty")
+        if self.status == "unmapped":
+            object.__setattr__(self, "status", "unaligned")
+        if self.status != "unaligned":
+            raise ValueError("unmapped edge evidence must have status=unaligned")

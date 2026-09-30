@@ -55,11 +55,11 @@ class _Parser:
         self._skip_ws()
         if self.index != len(self.text) - 1:
             raise TreeError("malformed Newick: trailing content after root")
-        labels: set[str] = set()
-        for leaf in _leaves(node):
-            if leaf.label in labels:
-                raise TreeError(f"duplicate leaf name in guide tree: {leaf.label}")
-            labels.add(leaf.label or "")
+        seen: set[str] = set()
+        for tree_node in _postorder(node):
+            if tree_node.node_id in seen:
+                raise TreeError(f"duplicate guide-tree node ID: {tree_node.node_id}")
+            seen.add(tree_node.node_id)
         return node
 
     def _subtree(self) -> TreeNode:
@@ -82,6 +82,9 @@ class _Parser:
                 raise TreeError("polytomies are not supported without an explicit resolution policy")
             label = self._label_or_none()
             node_id = label or self._next_internal_id()
+            child_ids = {child.node_id for child in children}
+            if node_id in child_ids:
+                raise TreeError(f"duplicate guide-tree node ID: {node_id}")
             return TreeNode(node_id, label, tuple(children))
         label = self._label_or_none()
         if not label:
@@ -142,7 +145,7 @@ def read_node_map(path: str | Path) -> dict[str, str]:
         parts = raw.split("\t")
         if len(parts) != 2:
             raise TreeError(f"invalid node map at line {line_number}: expected node_id<TAB>hal_genome")
-        node_id, hal_genome = parts
+        node_id, hal_genome = (part.strip() for part in parts)
         if not node_id or not hal_genome:
             raise TreeError(f"invalid node map at line {line_number}: empty field")
         if node_id in mapping:

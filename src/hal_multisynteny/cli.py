@@ -192,7 +192,7 @@ def _reconcile(args: argparse.Namespace) -> int:
 
 
 def _hal_info(args: argparse.Namespace) -> int:
-    info = inspect_hal(args.hal, required_genomes=args.genome or None)
+    info = inspect_hal(args.hal, required_genomes=args.genome or None, metadata_level=args.metadata_level)
     write_hal_info(args.output, info)
     print(f"wrote HAL metadata for {len(info['genomes'])} genomes")
     return 0
@@ -289,6 +289,7 @@ def build_parser() -> argparse.ArgumentParser:
     hal_info.add_argument("--hal", required=True)
     hal_info.add_argument("--output", required=True)
     hal_info.add_argument("--genome", action="append", help="required HAL genome name")
+    hal_info.add_argument("--metadata-level", choices=("basic", "sequences"), default="basic")
     hal_info.set_defaults(func=_hal_info)
 
     validate_tree = subparsers.add_parser("validate-tree", help="validate a rooted binary guide tree")

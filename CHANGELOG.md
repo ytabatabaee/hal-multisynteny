@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.1 - 2026-09-30
+
+- Separate logical guide-tree node IDs from HAL genome names during extraction;
+  `halLiftover` now receives HAL names while edge outputs keep logical IDs.
+- Run HAL preflight before real extraction and checkpoint mutation, validating
+  required genomes and direct child-to-parent HAL ancestry from the node map.
+- Represent unmapped child intervals as nonspatial `UnmappedEdgeEvidence`
+  instead of fabricating parent coordinates.
+- Classify `halLiftover` BED output conservatively: exact single mappings are
+  unique, distinct full-length alternatives are duplicated, identical repeats
+  collapse, and shorter/gapped rows fail until a richer HAL API backend is
+  available.
+- Compose descendant orientation across tree levels and strengthen split,
+  inversion, and propagation invariants in tests.
+- Make checkpoint reuse content-addressed across leaf seeds, fake mappings, HAL
+  identity, tree and node-map checksums, backend settings, reconciliation
+  parameters, child manifests, schema version, and output checksums.
+- Validate existing leaf checkpoints, narrow `--force-node` recomputation to the
+  forced node and its ancestors, and replace checkpoints through a backup-backed
+  atomic swap.
+- Stream file hashing in bounded memory and make `hal-info` sequence statistics
+  optional through `--metadata-level basic|sequences`.
+- Add optional `pytest.mark.hal` coverage that skips cleanly when real HAL tools
+  are absent.
+
 ## 0.3.0 - 2026-09-30
 
 - Add explicit node-block, node-occurrence, leaf-occurrence, and edge-mapping

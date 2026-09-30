@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from .models import EdgeMappingRun, NodeBlock
-from .reconcile import checksum
+from .models import EdgeMappingRun, NodeBlock, UnmappedEdgeEvidence
+from .utils import sha256_file
 
 
 class ExtractionError(RuntimeError):
@@ -23,6 +23,7 @@ class ExtractionError(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class EdgeExtractionResult:
     runs: tuple[EdgeMappingRun, ...]
+    unmapped: tuple[UnmappedEdgeEvidence, ...]
     backend: str
     tool_versions: dict[str, str]
     commands: tuple[tuple[str, ...], ...]
@@ -32,8 +33,10 @@ class EdgeExtractionResult:
 class EdgeExtractor(Protocol):
     def extract(
         self,
-        child_node: str,
-        parent_node: str,
+        child_node_id: str,
+        parent_node_id: str,
+        child_hal_genome: str,
+        parent_hal_genome: str,
         child_blocks: Iterable[NodeBlock],
     ) -> EdgeExtractionResult:
         ...
@@ -48,8 +51,10 @@ class FakeEdgeExtractor:
 
     def extract(
         self,
-        child_node: str,
-        parent_node: str,
+        child_node_id: str,
+        parent_node_id: str,
+        child_hal_genome: str,
+        parent_hal_genome: str,
         child_blocks: Iterable[NodeBlock],
     ) -> EdgeExtractionResult:
         block_ids = {block.block_id for block in child_blocks}
@@ -58,8 +63,8 @@ class FakeEdgeExtractor:
                 (
                     run
                     for run in self._runs
-                    if run.child_node == child_node
-                    and run.parent_node == parent_node
+                    if run.child_node == child_node_id
+                    and run.parent_node == parent_node_id
                     and run.child_block_id in block_ids
                 ),
                 key=lambda run: (
@@ -74,6 +79,7 @@ class FakeEdgeExtractor:
         )
         return EdgeExtractionResult(
             runs,
+            (),
             "fake",
             {"fake": "1"},
             ((str(self.mapping_path),),),
@@ -137,17 +143,19 @@ class HalEdgeExtractor:
             raise ExtractionError("missing HAL tool: halLiftover is not on PATH")
         if not self.hal_stats:
             raise ExtractionError("missing HAL tool: halStats is not on PATH")
-        self.hal_checksum = checksum(self.hal_path.read_bytes())
+        self.hal_checksum = sha256_file(self.hal_path)
 
     def extract(
         self,
-        child_node: str,
-        parent_node: str,
+        child_node_id: str,
+        parent_node_id: str,
+        child_hal_genome: str,
+        parent_hal_genome: str,
         child_blocks: Iterable[NodeBlock],
     ) -> EdgeExtractionResult:
         blocks = tuple(sorted(child_blocks, key=lambda block: (block.chrom, block.start, block.end, block.block_id)))
         if not blocks:
-            return EdgeExtractionResult((), "halLiftover-bed6", self.tool_versions(), ())
+            return EdgeExtractionResult((), (), "halLiftover-bed6", self.tool_versions(), ())
         with tempfile.TemporaryDirectory(prefix="hms-hal-") as temp_name:
             temp = Path(temp_name)
             input_bed = temp / "child.bed"
@@ -170,9 +178,9 @@ class HalEdgeExtractor:
             command = (
                 self.hal_liftover,
                 str(self.hal_path),
-                child_node,
+                child_hal_genome,
                 str(input_bed),
-                parent_node,
+                parent_hal_genome,
                 str(output_bed),
             )
             completed = subprocess.run(command, check=False, capture_output=True, text=True)
@@ -181,9 +189,12 @@ class HalEdgeExtractor:
                     "halLiftover failed with exit "
                     f"{completed.returncode}: {completed.stderr.strip() or completed.stdout.strip()}"
                 )
-            runs = self._parse_bed_output(output_bed, blocks, child_node, parent_node, command)
+            runs, unmapped = self._parse_bed_output(
+                output_bed, blocks, child_node_id, parent_node_id, command
+            )
         return EdgeExtractionResult(
             tuple(sorted(runs, key=lambda run: (run.parent_chrom, run.parent_start, run.child_block_id))),
+            tuple(sorted(unmapped, key=lambda row: (row.child_node, row.child_block_id))),
             "halLiftover-bed6",
             self.tool_versions(),
             (command,),
@@ -208,10 +219,11 @@ class HalEdgeExtractor:
         child_node: str,
         parent_node: str,
         command: tuple[str, ...],
-    ) -> list[EdgeMappingRun]:
+    ) -> tuple[list[EdgeMappingRun], list[UnmappedEdgeEvidence]]:
         by_id = {block.block_id: block for block in blocks}
-        seen: set[str] = set()
+        grouped: dict[str, list[tuple[int, str, int, int, str]]] = {}
         runs: list[EdgeMappingRun] = []
+        unmapped: list[UnmappedEdgeEvidence] = []
         with path.open(encoding="utf-8") as handle:
             for line_number, raw in enumerate(handle, start=1):
                 if not raw.strip():
@@ -224,16 +236,29 @@ class HalEdgeExtractor:
                 chrom, start_text, end_text, name, _score, strand = parts[:6]
                 if name not in by_id:
                     raise ExtractionError(f"halLiftover returned unknown interval name {name!r}")
-                block = by_id[name]
                 parent_start = int(start_text)
                 parent_end = int(end_text)
-                length = parent_end - parent_start
-                if length != block.end - block.start:
+                grouped.setdefault(name, []).append(
+                    (line_number, chrom, parent_start, parent_end, strand)
+                )
+        for name, rows in grouped.items():
+            block = by_id[name]
+            distinct = sorted(set(rows), key=lambda row: row[0])
+            interval_length = block.end - block.start
+            for _line_number, _chrom, parent_start, parent_end, _strand in distinct:
+                if parent_end - parent_start != interval_length:
                     raise ExtractionError(
-                        "halLiftover output does not preserve exact source interval length for "
-                        f"{name}; split-gapped HAL parsing is required"
+                        "halLiftover BED output contains a shorter or gapped fragment for "
+                        f"{name}; exact source subinterval reconstruction requires a richer HAL API backend"
                     )
-                seen.add(name)
+            unique_mappings = sorted(
+                {(chrom, start, end, strand) for _line, chrom, start, end, strand in distinct}
+            )
+            status = "unique" if len(unique_mappings) == 1 else "duplicated"
+            for alternative_index, (chrom, parent_start, parent_end, strand) in enumerate(
+                unique_mappings, start=1
+            ):
+                copy_id = "1" if status == "unique" else str(alternative_index)
                 runs.append(
                     EdgeMappingRun(
                         child_node,
@@ -247,37 +272,32 @@ class HalEdgeExtractor:
                         parent_start,
                         parent_end,
                         strand,
-                        "1",
-                        "unique",
-                        f"{child_node}:{block.block_id}:halLiftover:{line_number}",
+                        copy_id,
+                        status,
+                        f"{child_node}:{block.block_id}:halLiftover:{alternative_index}",
                         "halLiftover",
                         json.dumps(command),
                     )
                 )
         for block in blocks:
-            if block.block_id in seen:
+            if block.block_id in grouped:
                 continue
-            runs.append(
-                EdgeMappingRun(
+            unmapped.append(
+                UnmappedEdgeEvidence(
                     child_node,
-                    block.block_id,
-                    block.block_id,
-                    block.chrom,
-                    block.start,
-                    block.end,
                     parent_node,
+                    block.block_id,
                     block.chrom,
                     block.start,
                     block.end,
-                    "+",
-                    "1",
                     "unaligned",
+                    "halLiftover returned no parent interval",
                     f"{child_node}:{block.block_id}:unaligned",
                     "halLiftover",
                     json.dumps(command),
                 )
             )
-        return runs
+        return runs, unmapped
 
 
 def _probe_version(tool: str) -> str:

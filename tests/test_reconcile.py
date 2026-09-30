@@ -915,7 +915,7 @@ def test_cli_outputs_summary_and_byte_repeatability(tmp_path):
         )]
         generated.append([path.read_bytes() for path in files])
         summary = json.loads((tmp_path / f"{prefix_name}.summary.json").read_text())
-        assert summary["version"] == "0.3.0"
+        assert summary["version"] == "0.3.1"
         assert summary["counts"]["blocks"] == 1
         assert summary["guide_tree_id"] == "tree-sha256:example"
         assert summary["parameters"]["copy_id_scope"] == "local"
@@ -956,4 +956,4 @@ def test_release_integrity_files_and_documentation():
     assert 'choices=("local", "global")' in (root / "src/hal_multisynteny/cli.py").read_text(
         encoding="utf-8"
     ), "CLI parser does not expose both copy-id scopes"
-    assert 'version = "0.3.0"' in pyproject, "project version changed from 0.3.0"
+    assert 'version = "0.3.1"' in pyproject, "project version changed from 0.3.1"

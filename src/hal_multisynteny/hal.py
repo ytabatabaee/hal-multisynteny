@@ -10,14 +10,19 @@ from pathlib import Path
 
 from . import __version__
 from .extract import ExtractionError, _probe_version
-from .reconcile import checksum
+from .utils import sha256_file
 
 
 class HalPreflightError(RuntimeError):
     """Raised when HAL tools or metadata cannot satisfy a requested operation."""
 
 
-def inspect_hal(hal_path: str | Path, *, required_genomes: list[str] | None = None) -> dict[str, object]:
+def inspect_hal(
+    hal_path: str | Path,
+    *,
+    required_genomes: list[str] | None = None,
+    metadata_level: str = "basic",
+) -> dict[str, object]:
     path = Path(hal_path)
     if not path.is_file():
         raise HalPreflightError(f"HAL file does not exist: {path}")
@@ -30,19 +35,22 @@ def inspect_hal(hal_path: str | Path, *, required_genomes: list[str] | None = No
     if not hal_liftover:
         raise HalPreflightError("missing HAL tool: halLiftover is not on PATH")
 
-    genomes = _run_hal_stats(hal_stats, path, "--genomes")
+    if metadata_level not in {"basic", "sequences"}:
+        raise HalPreflightError("metadata_level must be 'basic' or 'sequences'")
+    genomes = _parse_genomes(_run_hal_stats(hal_stats, path, "--genomes"))
     parent_map = _parse_parent_map(_run_hal_stats(hal_stats, path, "--tree"))
-    sequence_lengths = {
-        genome: _parse_sequence_lengths(_run_hal_stats(hal_stats, path, "--sequenceStats", genome))
-        for genome in genomes
-    }
     missing = sorted(set(required_genomes or ()) - set(genomes))
     if missing:
         raise HalPreflightError(f"HAL file is missing requested genome(s): {', '.join(missing)}")
+    sequence_targets = genomes if metadata_level == "sequences" else sorted(required_genomes or [])
+    sequence_lengths = {
+        genome: _parse_sequence_lengths(_run_hal_stats(hal_stats, path, "--sequenceStats", genome))
+        for genome in sequence_targets
+    }
     return {
         "version": __version__,
         "hal_path": str(path),
-        "hal_sha256": checksum(path.read_bytes()),
+        "hal_sha256": sha256_file(path),
         "hal_size": path.stat().st_size,
         "genomes": genomes,
         "parent_map": parent_map,
@@ -56,6 +64,7 @@ def inspect_hal(hal_path: str | Path, *, required_genomes: list[str] | None = No
             [hal_stats, str(path), "--tree"],
             [hal_stats, str(path), "--sequenceStats", "<genome>"],
         ],
+        "metadata_level": metadata_level,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -95,6 +104,15 @@ def _parse_parent_map(tree_text: str) -> dict[str, str]:
             visit(parse_newick(raw.strip()))
             return parent
     return parent
+
+
+def _parse_genomes(text: str) -> list[str]:
+    genomes: list[str] = []
+    for raw in text.replace(",", " ").split():
+        token = raw.strip()
+        if token and token not in {"Genome", "genomes:"}:
+            genomes.append(token)
+    return sorted(dict.fromkeys(genomes))
 
 
 def _parse_sequence_lengths(text: str) -> dict[str, int]:

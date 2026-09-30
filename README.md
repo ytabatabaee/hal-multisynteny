@@ -5,7 +5,7 @@ shared multi-genome synteny-block alphabet from Cactus/HAL homology mappings.
 It is intended for rearrangement phylogeny and comparative-genomics research in
 which pairwise blocks are insufficient.
 
-> **Status:** research prototype. Version 0.3.0 adds the first checkpointed,
+> **Status:** research prototype. Version 0.3.1 provides the first checkpointed,
 > bottom-up, HAL-backed pilot runner. It is intended for small bird or fish clade
 > experiments, not VGP-scale production analysis, and should not be described as
 > a finished replacement for MAF2Synteny.
@@ -132,7 +132,7 @@ do not establish VGP-scale performance.
 
 ## Bottom-up HAL pilot runner
 
-Version 0.3.0 adds a checkpointed tree runner:
+Version 0.3.1 includes a checkpointed tree runner:
 
 ```bash
 hal-multisynteny run-tree \
@@ -161,15 +161,24 @@ The coordinate model is explicit:
 - `NodeBlockOccurrence`: the represented interval in the current node;
 - `LeafOccurrence`: an extant descendant interval plus the current-node interval
   it represents;
-- `EdgeMappingRun`: a child-node block interval mapped to the direct HAL parent.
+- `EdgeMappingRun`: a child-node block interval mapped to the direct HAL parent;
+- `UnmappedEdgeEvidence`: a child-node block interval with no known parent
+  location.
 
 Internal-node blocks are mapped upward using their internal HAL coordinates. The
 runner does not remap every extant occurrence independently at each level.
+The extraction interface carries both logical guide-tree IDs and HAL genome
+names. Subprocess calls use HAL genome names from the node map, while output
+tables and manifests retain the logical node IDs needed for traversal and
+checkpointing.
 
 Additional commands:
 
 ```bash
-hal-multisynteny hal-info --hal alignment.hal --output hal-info.json
+hal-multisynteny hal-info \
+  --hal alignment.hal \
+  --metadata-level basic \
+  --output hal-info.json
 
 hal-multisynteny validate-tree \
   --tree pilot.nwk \
@@ -186,8 +195,29 @@ hal-multisynteny init-leaves \
 
 Use `--backend fake --fake-mappings <tsv>` for deterministic tests and examples
 without HAL. The real backend uses batched direct `halLiftover` calls and accepts
-only strict length-preserving BED6 output; if gapped HAL output loses exact
-source-to-parent correspondence, it stops with an explicit limitation.
+only strict whole-interval, length-preserving BED6 output. One exact mapping is
+`unique`; repeated identical rows collapse to the same mapping; multiple
+distinct full-length mappings are retained as duplicated alternatives with
+deterministic copy IDs. Missing mappings are written as nonspatial
+`UnmappedEdgeEvidence` and do not create parent intervals. If gapped or shorter
+HAL BED rows do not reveal exact source subinterval correspondence, the backend
+stops with an explicit limitation and recommends a richer HAL API backend.
+
+For `run-tree --backend hal`, the runner inspects HAL before writing node
+checkpoints. It verifies that all node-map HAL genomes exist and that every
+direct guide-tree child maps to the expected HAL parent. Failed preflight leaves
+existing checkpoints untouched.
+
+`hal-info` defaults to `--metadata-level basic`, which records HAL identity,
+genomes, parent relationships, and tool information without scanning sequence
+statistics for every genome. Use `--metadata-level sequences` when full sequence
+length collection is needed; on large HALs this can issue one `halStats
+--sequenceStats` call per genome.
+
+Resume is content-addressed. A checkpoint is reused only when its schema,
+parameters, HAL or fake mapping identity, leaf seed checksum, normalized tree,
+node map, backend, current child manifests, and output checksums all match the
+current run. `--force-node X` recomputes `X` and its ancestors only.
 
 ## Installation
 

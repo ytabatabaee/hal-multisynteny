@@ -10,6 +10,7 @@ from .models import (
     NodeBlock,
     NodeBlockOccurrence,
     ParentMappedRun,
+    UnmappedEdgeEvidence,
 )
 from .reconcile import ReconcileConfig, ReconcileResult, reconcile_node
 
@@ -26,8 +27,9 @@ __all__ = [
     "ParentMappedRun",
     "ReconcileConfig",
     "ReconcileResult",
+    "UnmappedEdgeEvidence",
     "build_blocks",
     "reconcile_node",
 ]
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
