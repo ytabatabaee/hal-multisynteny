@@ -169,6 +169,14 @@ class _ProjectedPiece:
     end: int
 
 
+@dataclass(frozen=True, slots=True)
+class _TrackSummary:
+    occurrence_keys: frozenset[tuple[str, str, str, str, str]]
+    copy_ids_by_species: dict[str, frozenset[str]]
+    duplicated_species: frozenset[str]
+    repeated_copy_species: frozenset[str]
+
+
 def _record_sort_key(record: ParentMappedRun) -> tuple[object, ...]:
     return (
         record.parent_start,
@@ -216,6 +224,14 @@ def _order_conflicts(runs: Iterable[ParentMappedRun]) -> set[tuple[str, str, str
             conflicts.add(key)
             continue
         for previous, current in pairwise(ordered):
+            same_interval = (
+                previous.parent_start == current.parent_start
+                and previous.parent_end == current.parent_end
+                and previous.start == current.start
+                and previous.end == current.end
+            )
+            if same_interval:
+                continue
             monotonic = (
                 previous.end <= current.start
                 if previous.strand == current.strand == "+"
@@ -227,6 +243,91 @@ def _order_conflicts(runs: Iterable[ParentMappedRun]) -> set[tuple[str, str, str
                 conflicts.add(key)
                 break
     return conflicts
+
+
+def _summarize_tracks(records: tuple[ParentMappedRun, ...]) -> _TrackSummary:
+    """Summarize records by biological occurrence track.
+
+    Rows sharing child node, species, child block, child occurrence, and copy ID
+    are fragments or source anchors for one occurrence. Rows with different
+    occurrence identities within one species are separate candidate copies.
+    """
+    occurrence_keys = frozenset(
+        (
+            record.child_node,
+            record.species,
+            record.child_block_id,
+            record.child_occurrence_id,
+            record.copy_id,
+        )
+        for record in records
+    )
+    copy_ids_by_species: dict[str, set[str]] = defaultdict(set)
+    species_copy_to_occurrences: dict[
+        tuple[str, str], set[tuple[str, str, str, str, str]]
+    ] = defaultdict(set)
+    duplicated_species: set[str] = set()
+    for record in records:
+        key = (
+            record.child_node,
+            record.species,
+            record.child_block_id,
+            record.child_occurrence_id,
+            record.copy_id,
+        )
+        copy_ids_by_species[record.species].add(record.copy_id)
+        species_copy_to_occurrences[(record.species, record.copy_id)].add(key)
+        if record.status == "duplicated":
+            duplicated_species.add(record.species)
+    repeated_copy_species = {
+        species
+        for (species, _copy_id), keys in species_copy_to_occurrences.items()
+        if len(keys) > 1
+    }
+    return _TrackSummary(
+        occurrence_keys,
+        {species: frozenset(copy_ids) for species, copy_ids in copy_ids_by_species.items()},
+        frozenset(duplicated_species),
+        frozenset(repeated_copy_species),
+    )
+
+
+def _has_species_level_duplication(summary: _TrackSummary) -> bool:
+    occurrence_counts: dict[str, int] = defaultdict(int)
+    for _child_node, species, _block_id, _occurrence_id, _copy_id in summary.occurrence_keys:
+        occurrence_counts[species] += 1
+    return any(count > 1 for count in occurrence_counts.values()) or bool(
+        summary.duplicated_species or summary.repeated_copy_species
+    )
+
+
+def _global_copy_ids_resolve(
+    left_summary: _TrackSummary,
+    right_summary: _TrackSummary,
+) -> bool:
+    if left_summary.repeated_copy_species or right_summary.repeated_copy_species:
+        return False
+    left_copies = set().union(*left_summary.copy_ids_by_species.values())
+    right_copies = set().union(*right_summary.copy_ids_by_species.values())
+    if not left_copies or not right_copies:
+        return False
+    return left_copies == right_copies
+
+
+def _biological_track_count(occurrences: Iterable[ReconciledOccurrence]) -> int:
+    return len(
+        {
+            (
+                occurrence.child_side,
+                occurrence.child_node,
+                occurrence.species,
+                occurrence.child_block_id,
+                occurrence.child_occurrence_id,
+                occurrence.copy_id,
+            )
+            for occurrence in occurrences
+        }
+    )
 
 
 def _classify(
@@ -267,15 +368,15 @@ def _classify(
     ):
         conflict_types.append("order_conflict")
 
-    has_candidates = len(usable_left) > 1 or len(usable_right) > 1
+    left_summary = _summarize_tracks(usable_left)
+    right_summary = _summarize_tracks(usable_right)
+    has_candidates = _has_species_level_duplication(left_summary) or _has_species_level_duplication(
+        right_summary
+    )
     if has_candidates:
-        copies_resolve = False
-        if config.copy_id_scope == "global":
-            left_copies = {record.copy_id for record in usable_left}
-            right_copies = {record.copy_id for record in usable_right}
-            left_unique = len(left_copies) == len(usable_left)
-            right_unique = len(right_copies) == len(usable_right)
-            copies_resolve = left_unique and right_unique and left_copies == right_copies
+        copies_resolve = config.copy_id_scope == "global" and _global_copy_ids_resolve(
+            left_summary, right_summary
+        )
         if not copies_resolve:
             conflict_types.append("duplication_conflict")
 
@@ -636,7 +737,7 @@ def reconcile_node(
                 _ids((record for atom in group for record in atom.right), "child_block_id"),
                 len({occurrence.species for occurrence in block_occurrences}),
                 len(block_occurrences),
-                len({(occurrence.species, occurrence.copy_id) for occurrence in block_occurrences}),
+                _biological_track_count(block_occurrences),
                 _mapping_quality(records),
                 len(group),
             )

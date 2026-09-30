@@ -1,6 +1,7 @@
 import csv
 import json
 from itertools import pairwise
+from pathlib import Path
 
 import pytest
 
@@ -63,6 +64,20 @@ def reconcile(left, right, **kwargs):
 
 def classifications(result):
     return [atom.classification for atom in result.atomic_intervals]
+
+
+def multi_species_internal_fixture():
+    left = [
+        mapped("left", "L1", "lA", 0, 100, species="A", start=1000),
+        mapped("left", "L1", "lB", 0, 100, species="B", start=2000),
+        mapped("left", "L1", "lC", 0, 100, species="C", start=3000),
+    ]
+    right = [
+        mapped("right", "R1", "rD", 0, 100, species="D", start=4000),
+        mapped("right", "R1", "rE", 0, 100, species="E", start=5000),
+        mapped("right", "R1", "rF", 0, 100, species="F", start=6000),
+    ]
+    return left, right
 
 
 def assert_occurrence_invariants(result):
@@ -459,10 +474,142 @@ def test_matching_global_copy_ids_can_resolve_duplication():
     assert len(result.occurrences) == 4
 
 
+def test_multi_species_unique_support_is_not_duplication_under_local_scope():
+    left, right = multi_species_internal_fixture()
+    result = reconcile(left, right)
+    assert classifications(result) == ["shared_consistent"]
+    block = result.blocks[0]
+    assert block.species_count == 6
+    assert block.occurrence_count == 6
+    assert block.copy_count == 6
+    assert block.classification == "shared_consistent"
+    assert block.mapping_quality == "unique"
+    assert {row.coverage for row in result.occurrences} == {"full"}
+    assert {row.relationship for row in result.provenance} == {"preserved"}
+    assert {row.species for row in result.occurrences} == {"A", "B", "C", "D", "E", "F"}
+    assert not result.conflicts
+    assert_occurrence_invariants(result)
+
+
+def test_multi_species_unique_support_is_not_duplication_under_global_scope():
+    left, right = multi_species_internal_fixture()
+    result = reconcile(left, right, copy_id_scope="global")
+    assert classifications(result) == ["shared_consistent"]
+    assert result.blocks[0].species_count == 6
+    assert result.blocks[0].occurrence_count == 6
+    assert result.blocks[0].copy_count == 6
+
+
+def test_repeated_copy_id_across_species_is_taxon_support_not_duplication():
+    left = [
+        mapped("left", "L", "lA", 0, 100, species="A", copy="1"),
+        mapped("left", "L", "lB", 0, 100, species="B", copy="1", start=200),
+        mapped("left", "L", "lC", 0, 100, species="C", copy="1", start=400),
+    ]
+    right = [
+        mapped("right", "R", "rD", 0, 100, species="D", copy="1", start=600),
+        mapped("right", "R", "rE", 0, 100, species="E", copy="1", start=800),
+        mapped("right", "R", "rF", 0, 100, species="F", copy="1", start=1000),
+    ]
+    assert classifications(reconcile(left, right)) == ["shared_consistent"]
+    assert classifications(reconcile(left, right, copy_id_scope="global")) == ["shared_consistent"]
+
+
+def test_collinear_source_fragments_for_one_occurrence_are_not_multiple_copies():
+    left = [
+        mapped("left", "L", "lA", 0, 100, species="A", anchor="left-frag-1"),
+        mapped("left", "L", "lA", 0, 100, species="A", anchor="left-frag-2"),
+    ]
+    right = [mapped("right", "R", "rD", 0, 100, species="D")]
+    result = reconcile(left, right)
+    assert classifications(result) == ["shared_consistent"]
+    left_occurrences = [row for row in result.occurrences if row.child_side == "left"]
+    assert len(left_occurrences) == 1
+    assert left_occurrences[0].source_anchor_id == "left-frag-1,left-frag-2"
+    assert len([row for row in result.provenance if row.child_side == "left"]) == 2
+    assert result.blocks[0].copy_count == 2
+
+
+def test_one_species_with_two_local_copies_is_duplication_conflict():
+    left = [
+        mapped("left", "L", "lA1", 0, 100, species="A", copy="1", status="duplicated"),
+        mapped("left", "L", "lA2", 0, 100, species="A", copy="2", status="duplicated", start=200),
+        mapped("left", "L", "lB", 0, 100, species="B", copy="1", start=400),
+    ]
+    right = [
+        mapped("right", "R", "rD", 0, 100, species="D"),
+        mapped("right", "R", "rE", 0, 100, species="E", start=600),
+    ]
+    assert classifications(reconcile(left, right)) == ["duplication_conflict"]
+
+
+def test_same_species_same_local_copy_id_in_two_occurrences_is_not_collapsed():
+    left = [
+        mapped("left", "L", "lA1", 0, 100, species="A", copy="1"),
+        mapped("left", "L", "lA2", 0, 100, species="A", copy="1", start=200),
+    ]
+    right = [mapped("right", "R", "rD", 0, 100, species="D")]
+    result = reconcile(left, right)
+    assert classifications(result) == ["duplication_conflict"]
+    assert len([row for row in result.occurrences if row.child_side == "left"]) == 2
+    assert result.blocks[0].copy_count == 3
+
+
+def test_global_copy_families_resolve_multi_species_duplication():
+    left = [
+        mapped("left", "L", "lA1", 0, 100, species="A", copy="1", status="duplicated"),
+        mapped("left", "L", "lA2", 0, 100, species="A", copy="2", status="duplicated", start=200),
+        mapped("left", "L", "lB1", 0, 100, species="B", copy="1", start=400),
+        mapped("left", "L", "lC2", 0, 100, species="C", copy="2", start=600),
+    ]
+    right = [
+        mapped("right", "R", "rD1", 0, 100, species="D", copy="1", status="duplicated"),
+        mapped(
+            "right", "R", "rD2", 0, 100, species="D", copy="2", status="duplicated", start=800
+        ),
+        mapped("right", "R", "rE1", 0, 100, species="E", copy="1", start=1000),
+        mapped("right", "R", "rF2", 0, 100, species="F", copy="2", start=1200),
+    ]
+    result = reconcile(left, right, copy_id_scope="global")
+    assert classifications(result) == ["shared_consistent"]
+    assert {row.copy_id for row in result.occurrences} == {"1", "2"}
+    assert len(result.occurrences) == 8
+
+
+def test_repeated_global_copy_family_labels_across_species_are_permitted():
+    left = [
+        mapped("left", "L", "lA", 0, 100, species="A", copy="1"),
+        mapped("left", "L", "lB", 0, 100, species="B", copy="1", start=200),
+        mapped("left", "L", "lC", 0, 100, species="C", copy="1", start=400),
+    ]
+    right = [
+        mapped("right", "R", "rD", 0, 100, species="D", copy="1", start=600),
+        mapped("right", "R", "rE", 0, 100, species="E", copy="1", start=800),
+        mapped("right", "R", "rF", 0, 100, species="F", copy="1", start=1000),
+    ]
+    assert classifications(reconcile(left, right, copy_id_scope="global")) == ["shared_consistent"]
+
+
 def test_nonmatching_global_copy_ids_remain_duplication_conflict():
     left = [mapped("left", "L", f"l{i}", 0, 10, copy=str(i), status="duplicated") for i in (1, 2)]
     right = [mapped("right", "R", f"r{i}", 0, 10, copy=str(i), status="duplicated") for i in (2, 3)]
     assert classifications(reconcile(left, right, copy_id_scope="global")) == ["duplication_conflict"]
+
+
+def test_global_copy_family_mismatch_remains_duplication_conflict():
+    left = [
+        mapped("left", "L", "lA1", 0, 100, species="A", copy="1", status="duplicated"),
+        mapped("left", "L", "lA2", 0, 100, species="A", copy="2", status="duplicated", start=200),
+    ]
+    right = [
+        mapped("right", "R", "rD1", 0, 100, species="D", copy="1", status="duplicated"),
+        mapped(
+            "right", "R", "rD3", 0, 100, species="D", copy="3", status="duplicated", start=400
+        ),
+    ]
+    assert classifications(reconcile(left, right, copy_id_scope="global")) == [
+        "duplication_conflict"
+    ]
 
 
 def test_duplication_plus_orientation_conflict_is_complex():
@@ -612,6 +759,48 @@ def test_determinism_permutation_swap_and_nonoverlap():
     assert_occurrence_invariants(first)
 
 
+def test_multi_species_permutation_and_child_exchange_are_stable():
+    left, right = multi_species_internal_fixture()
+    first = reconcile(left, right)
+    permuted = reconcile(list(reversed(left)), list(reversed(right)))
+    assert first == permuted
+    swapped = reconcile(
+        [
+            mapped(
+                "left",
+                row.child_block_id,
+                row.child_occurrence_id,
+                row.parent_start,
+                row.parent_end,
+                species=row.species,
+                chrom=row.chrom,
+                start=row.start,
+                copy=row.copy_id,
+                status=row.status,
+                anchor=row.source_anchor_id.replace("right-", "left-", 1),
+            )
+            for row in right
+        ],
+        [
+            mapped(
+                "right",
+                row.child_block_id,
+                row.child_occurrence_id,
+                row.parent_start,
+                row.parent_end,
+                species=row.species,
+                chrom=row.chrom,
+                start=row.start,
+                copy=row.copy_id,
+                status=row.status,
+                anchor=row.source_anchor_id.replace("left-", "right-", 1),
+            )
+            for row in left
+        ],
+    )
+    assert normalize_result(first) == normalize_result(swapped, exchange=True)
+
+
 def test_duplicate_occurrence_rows_are_coalesced_without_losing_anchors():
     left = [
         mapped("left", "L", "l", 0, 10, status="duplicated", anchor="a1"),
@@ -688,3 +877,22 @@ def test_cli_validation_error(tmp_path):
     with pytest.raises(SystemExit) as error:
         main(["validate-runs", "--runs", str(path), "--parent-node", "parent"])
     assert error.value.code == 2
+
+
+def test_release_integrity_files_and_documentation():
+    root = Path(__file__).resolve().parents[1]
+    consistency_doc = root / "docs" / "HALSYNTENY_CONSISTENCY.md"
+    workflow = root / ".github" / "workflows" / "tests.yml"
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert consistency_doc.exists()
+    assert workflow.exists()
+    assert (root / "docs/HALSYNTENY_CONSISTENCY.md").exists()
+    assert "[`docs/HALSYNTENY_CONSISTENCY.md`](docs/HALSYNTENY_CONSISTENCY.md)" in readme
+    assert "--copy-id-scope local" in readme
+    assert "--copy-id-scope global" in readme
+    assert 'choices=("local", "global")' in (root / "src/hal_multisynteny/cli.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'version = "0.2.0"' in pyproject

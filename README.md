@@ -68,18 +68,38 @@ An atom can be:
 
 `left_only`, `right_only`, `ambiguous`, and `unaligned` must not be interpreted
 as biological absence. Establishing absence requires independent evidence.
-Missing mappings are missing evidence, not confirmed deletions. Usable evidence
+Missing mappings, including missing species coverage for a copy family, are
+missing evidence, not confirmed deletions or copy conflicts. Usable evidence
 mixed with ambiguous or unaligned alternatives is classified conservatively as
 `complex` so that uncertainty is not collapsed into a simpler label.
+
+Internal child block systems normally contain multiple descendant taxa. Multiple
+records from different species are species support, not duplication. The
+reconciler detects duplicate candidates within a biological track grouped by
+child node, species, child block, child occurrence, and copy ID. Multiple source
+anchors or collinear fragments for the same grouped occurrence are retained as
+fragments of one occurrence. A species is treated as multi-copy when it has
+multiple active occurrence identities, multiple active copy IDs, repeated
+occurrences for the same copy ID, or records explicitly marked `duplicated`.
 
 Duplicated alternatives are retained with their copy IDs; the reconciler never
 picks one paralog silently. Copy IDs are local to each child block system by
 default (`--copy-id-scope local`), so matching labels such as `1` and `2` in two
-children do not establish orthology and remain `duplication_conflict`. Use
-`--copy-id-scope global` only when the input producer guarantees comparable
-copy labels across child systems. Under `global`, duplicated candidates can
-resolve only when each copy occurs exactly once on each side, the copy sets
-match, and orientation/order checks are compatible.
+children do not establish cross-child orthology and remain
+`duplication_conflict` when they label alternatives. Under local scope, one
+unique occurrence per species is ordinary support, even when several species in
+the child system use copy label `1`.
+
+Use `--copy-id-scope global` only when the input producer guarantees comparable
+copy-family labels across child systems. Under `global`, the same copy-family
+label may appear in many species; repeated use by species A, B, and C means
+those species carry evidence for the same family, not three duplicate copies.
+Duplicated candidates can resolve only when no species has more than one active
+occurrence assigned to the same global family, the side-level active copy-family
+sets match, and orientation/order checks are compatible. The current policy is
+conservative: it does not infer orthology when global labels are incomplete,
+contradictory, or absent, and it does not require every species to carry every
+family.
 
 Filtered atoms containing evidence are hard block boundaries. A retained atom on
 one side of a below-threshold interval never merges with a retained atom on the
@@ -204,6 +224,9 @@ The occurrence table retains the evaluator-compatible columns plus child-side,
 child-node, child-block, and child-occurrence provenance. Each occurrence's
 ancestral coordinates describe the represented portion of the parent block, not
 necessarily the full parent block; the `coverage` column is `full` or `partial`.
+In `blocks.tsv`, `copy_count` is a compatibility column that counts distinct
+species/occurrence/copy tracks represented in the block. It is not a count of
+globally distinct biological copy families.
 The summary records parameters, including copy-ID scope, child ordering,
 guide-tree identifier, SHA-256 input checksums,
 classification counts and coverage, mapping-status fractions, and output names.
@@ -215,6 +238,13 @@ input boundaries**, not automatically a uniquely correct biological synteny
 block. Block definitions depend on minimum length, taxon sampling, the chosen
 ancestor, alignment fragmentation, duplication handling, and later chaining
 rules.
+
+Multi-species child systems are expected during bottom-up reconciliation. A
+parent interval can be carried upward as `shared_consistent` when each species
+has one active occurrence, even if each child contributes many species. That
+classification means the observed child systems are compatible under the
+declared copy-ID scope; it does not prove complete multi-species orthology for
+unobserved taxa or unresolved duplications.
 
 Therefore, comparisons with MAF2Synteny should report:
 
