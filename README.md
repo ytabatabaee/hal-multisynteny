@@ -5,10 +5,10 @@ shared multi-genome synteny-block alphabet from Cactus/HAL homology mappings.
 It is intended for rearrangement phylogeny and comparative-genomics research in
 which pairwise blocks are insufficient.
 
-> **Status:** research prototype. Version 0.2.0 adds deterministic reconciliation
-> of two child block systems at one parent node. It does **not yet traverse an
-> entire HAL file directly** and should not be described as a finished replacement
-> for MAF2Synteny.
+> **Status:** research prototype. Version 0.3.0 adds the first checkpointed,
+> bottom-up, HAL-backed pilot runner. It is intended for small bird or fish clade
+> experiments, not VGP-scale production analysis, and should not be described as
+> a finished replacement for MAF2Synteny.
 
 ## Algorithm
 
@@ -120,9 +120,9 @@ continuation. It cannot cross a classification, orientation, order, copy, or
 chromosome change. The atomic table keeps every original cut and records the
 merge decision.
 
-For a binary tree with `n` leaves, a future runner would need to map across tree
-edges, but this release only performs one parent node. For `r` runs on one
-parent chromosome, boundary sorting costs `O(r log r)`. The sweep then
+The `reconcile-node` command still performs one parent node. The 0.3 tree runner
+calls this operation at each internal guide-tree node after edge extraction. For
+`r` runs on one parent chromosome, boundary sorting costs `O(r log r)`. The sweep then
 materializes and sorts active left/right membership for each emitted atomic
 interval, so total runtime also depends on the sum of active-set sizes and on
 output table size. Memory is proportional to that chromosome's runs, active
@@ -130,10 +130,69 @@ state, retained groups, and emitted records. Chromosomes are independent and
 form a natural future sharding boundary. These properties and synthetic tests
 do not establish VGP-scale performance.
 
+## Bottom-up HAL pilot runner
+
+Version 0.3.0 adds a checkpointed tree runner:
+
+```bash
+hal-multisynteny run-tree \
+  --hal alignment.hal \
+  --tree pilot.nwk \
+  --node-map node-map.tsv \
+  --leaf-blocks leaf-blocks/ \
+  --output-dir pilot-run/ \
+  --min-block-length 50 \
+  --boundary-tolerance 1 \
+  --max-merge-gap 0 \
+  --copy-id-scope local \
+  --backend hal \
+  --resume
+```
+
+The runner parses a rooted binary guide tree, initializes supplied leaf seed
+blocks, maps each child node's own `NodeBlock` coordinates to its direct HAL
+parent, reconciles sibling block systems with the v0.2 engine, propagates
+descendant leaf occurrences, and writes atomic node checkpoints under
+`nodes/<node_id>/`.
+
+The coordinate model is explicit:
+
+- `NodeBlock`: an interval in the current child or internal HAL genome;
+- `NodeBlockOccurrence`: the represented interval in the current node;
+- `LeafOccurrence`: an extant descendant interval plus the current-node interval
+  it represents;
+- `EdgeMappingRun`: a child-node block interval mapped to the direct HAL parent.
+
+Internal-node blocks are mapped upward using their internal HAL coordinates. The
+runner does not remap every extant occurrence independently at each level.
+
+Additional commands:
+
+```bash
+hal-multisynteny hal-info --hal alignment.hal --output hal-info.json
+
+hal-multisynteny validate-tree \
+  --tree pilot.nwk \
+  --node-map node-map.tsv \
+  --hal alignment.hal \
+  --output traversal-plan.json
+
+hal-multisynteny init-leaves \
+  --tree pilot.nwk \
+  --node-map node-map.tsv \
+  --leaf-blocks leaf-blocks/ \
+  --output-dir pilot-run/
+```
+
+Use `--backend fake --fake-mappings <tsv>` for deterministic tests and examples
+without HAL. The real backend uses batched direct `halLiftover` calls and accepts
+only strict length-preserving BED6 output; if gapped HAL output loses exact
+source-to-parent correspondence, it stops with an explicit limitation.
+
 ## Installation
 
 HAL command-line tools are not needed for the synthetic example or unit tests.
-They will be needed by the planned HAL extraction layer.
+They are needed by `hal-info` and `run-tree --backend hal`.
 
 ```bash
 git clone https://github.com/ytabatabaee/hal-multisynteny.git
@@ -280,15 +339,21 @@ for cross-run correspondence analysis.
 Open questions about `halSynteny` query/target reversal, ancestor composition,
 duplication, PSL information loss, and tiny fixture requirements are tracked in
 [`docs/HALSYNTENY_CONSISTENCY.md`](docs/HALSYNTENY_CONSISTENCY.md).
+The 0.3 design and pilot workflow are documented in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
+[`docs/HAL_EXTRACTION.md`](docs/HAL_EXTRACTION.md),
+[`docs/CHECKPOINT_SCHEMA.md`](docs/CHECKPOINT_SCHEMA.md), and
+[`docs/PILOT_PROTOCOL.md`](docs/PILOT_PROTOCOL.md).
 
 ## Roadmap
 
 ### 0.3: HAL extraction and tree runner
 
-- batch extraction of ancestral mapping runs through HAL APIs;
-- chromosome/ancestral-segment streaming;
-- provenance including HAL genome names, commands, and checksums.
-- bottom-up traversal over a binary guide tree with resumable node outputs.
+- HAL preflight metadata inspection;
+- direct child-to-parent edge extraction interface with fake and HAL backends;
+- bottom-up traversal over a binary guide tree with resumable node outputs;
+- checkpoint manifests with checksums and extraction provenance;
+- fake four-leaf pilot example.
 
 ### 0.4: block simplification research
 

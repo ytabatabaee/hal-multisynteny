@@ -1,4 +1,4 @@
-"""Core immutable records used by the block builder."""
+"""Core immutable records used by the block builder and tree runner."""
 
 from __future__ import annotations
 
@@ -128,4 +128,133 @@ class ParentMappedRun:
             self.child_block_id,
             self.child_occurrence_id,
             self.source_anchor_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NodeBlock:
+    """One block interval in the current HAL genome for a tree node."""
+
+    block_id: str
+    node: str
+    chrom: str
+    start: int
+    end: int
+    classification: str = "leaf_seed"
+    mapping_status: str = "unique"
+
+    def __post_init__(self) -> None:
+        if not self.block_id.strip() or not self.node.strip() or not self.chrom.strip():
+            raise ValueError("node block identity fields may not be empty")
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("node block coordinates must be non-negative half-open intervals")
+        if self.mapping_status not in VALID_STATUSES - {"unmapped"}:
+            raise ValueError("node block mapping_status must be unique, duplicated, ambiguous, or unaligned")
+
+
+@dataclass(frozen=True, slots=True)
+class NodeBlockOccurrence:
+    """A represented child/node interval carried by a node block."""
+
+    block_id: str
+    node: str
+    node_chrom: str
+    node_start: int
+    node_end: int
+    occurrence_id: str
+    copy_id: str
+    status: str
+    source_block_id: str
+
+    def __post_init__(self) -> None:
+        if self.node_start < 0 or self.node_end <= self.node_start:
+            raise ValueError("node occurrence coordinates must be non-negative half-open intervals")
+        if self.status not in VALID_STATUSES - {"unmapped"}:
+            raise ValueError("node occurrence status must be unique, duplicated, ambiguous, or unaligned")
+
+
+@dataclass(frozen=True, slots=True)
+class LeafOccurrence:
+    """An extant leaf occurrence represented by a current node block."""
+
+    block_id: str
+    occurrence_id: str
+    leaf: str
+    chrom: str
+    start: int
+    end: int
+    strand: str
+    copy_id: str
+    status: str
+    source: str
+    node: str
+    node_chrom: str
+    node_start: int
+    node_end: int
+
+    def __post_init__(self) -> None:
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("leaf occurrence coordinates must be non-negative half-open intervals")
+        if self.node_start < 0 or self.node_end <= self.node_start:
+            raise ValueError("leaf occurrence node coordinates must be non-negative half-open intervals")
+        if self.end - self.start != self.node_end - self.node_start:
+            raise ValueError("leaf and node occurrence intervals must be length preserving")
+        if self.strand not in VALID_STRANDS:
+            raise ValueError(f"strand must be one of {sorted(VALID_STRANDS)}")
+        if self.status not in VALID_STATUSES - {"unmapped"}:
+            raise ValueError("leaf occurrence status must be unique, duplicated, ambiguous, or unaligned")
+
+
+@dataclass(frozen=True, slots=True)
+class EdgeMappingRun:
+    """Mapping of a child node block interval to its direct HAL parent."""
+
+    child_node: str
+    child_block_id: str
+    child_occurrence_id: str
+    child_chrom: str
+    child_start: int
+    child_end: int
+    parent_node: str
+    parent_chrom: str
+    parent_start: int
+    parent_end: int
+    strand: str
+    copy_id: str
+    status: str
+    source_anchor_id: str
+    tool: str = ""
+    command: str = ""
+
+    def __post_init__(self) -> None:
+        if self.child_start < 0 or self.parent_start < 0:
+            raise ValueError("edge mapping coordinates must be non-negative")
+        if self.child_end <= self.child_start or self.parent_end <= self.parent_start:
+            raise ValueError("edge mapping intervals must be nonempty")
+        if self.child_end - self.child_start != self.parent_end - self.parent_start:
+            raise ValueError("edge mappings must be split into length-preserving runs")
+        if self.strand not in VALID_STRANDS:
+            raise ValueError(f"strand must be one of {sorted(VALID_STRANDS)}")
+        if self.status == "unmapped":
+            object.__setattr__(self, "status", "unaligned")
+        if self.status not in VALID_STATUSES - {"unmapped"}:
+            raise ValueError("edge mapping status must be unique, duplicated, ambiguous, or unaligned")
+
+    def to_parent_mapped_run(self) -> ParentMappedRun:
+        return ParentMappedRun(
+            child_node=self.child_node,
+            child_block_id=self.child_block_id,
+            child_occurrence_id=self.child_occurrence_id,
+            species=self.child_node,
+            chrom=self.child_chrom,
+            start=self.child_start,
+            end=self.child_end,
+            parent_node=self.parent_node,
+            parent_chrom=self.parent_chrom,
+            parent_start=self.parent_start,
+            parent_end=self.parent_end,
+            strand=self.strand,
+            copy_id=self.copy_id,
+            status=self.status,
+            source_anchor_id=self.source_anchor_id,
         )

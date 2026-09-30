@@ -1,7 +1,16 @@
 """Ancestry-aware multi-genome synteny block construction."""
 
 from .builder import BuildConfig, BuildResult, build_blocks
-from .models import AlignmentRun, AncestralBlock, BlockOccurrence, ParentMappedRun
+from .models import (
+    AlignmentRun,
+    AncestralBlock,
+    BlockOccurrence,
+    EdgeMappingRun,
+    LeafOccurrence,
+    NodeBlock,
+    NodeBlockOccurrence,
+    ParentMappedRun,
+)
 from .reconcile import ReconcileConfig, ReconcileResult, reconcile_node
 
 __all__ = [
@@ -10,6 +19,10 @@ __all__ = [
     "BlockOccurrence",
     "BuildConfig",
     "BuildResult",
+    "EdgeMappingRun",
+    "LeafOccurrence",
+    "NodeBlock",
+    "NodeBlockOccurrence",
     "ParentMappedRun",
     "ReconcileConfig",
     "ReconcileResult",
@@ -17,4 +30,4 @@ __all__ = [
     "reconcile_node",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

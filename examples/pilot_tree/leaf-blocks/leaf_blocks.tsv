@@ -1,0 +1,5 @@
+leaf	block_id	chrom	start	end	strand	copy_id	status	source
+A	A_seed_1	chr1	0	100	+	1	unique	example
+B	B_seed_1	chr1	0	100	+	1	unique	example
+C	C_seed_1	chr1	0	100	+	1	unique	example
+D	D_seed_1	chr1	0	100	+	1	unique	example

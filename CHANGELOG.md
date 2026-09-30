@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 - 2026-09-30
+
+- Add explicit node-block, node-occurrence, leaf-occurrence, and edge-mapping
+  models so internal HAL coordinates are not conflated with extant leaf
+  occurrences.
+- Add rooted binary Newick parsing, node-map validation, normalized traversal
+  plans, and deterministic unnamed internal-node IDs.
+- Add HAL preflight metadata inspection and a guarded HAL edge backend using
+  batched direct `halLiftover` BED extraction.
+- Add a deterministic fake edge backend for tests and examples.
+- Add a checkpointed bottom-up tree runner with atomic node packages, manifests,
+  checksums, resume, forced-node recomputation, and dry-run plans.
+- Add supplied leaf seed-block initialization and descendant leaf-occurrence
+  propagation through splits and merges.
+- Add the fake four-leaf pilot example and architecture, HAL extraction,
+  checkpoint schema, and pilot protocol documentation.
+- Keep v0.2 single-node reconciliation TSVs and CLI behavior available.
+
 ## 0.2.0 - 2026-09-18
 
 - Add deterministic single-node reconciliation over two parent-mapped child systems.

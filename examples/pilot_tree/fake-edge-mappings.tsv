@@ -1,0 +1,7 @@
+child_node	child_block_id	child_occurrence_id	child_chrom	child_start	child_end	parent_node	parent_chrom	parent_start	parent_end	strand	copy_id	status	source_anchor_id	tool	command
+A	A_seed_1	A_seed_1	chr1	0	100	n1	chrN1	0	100	+	1	unique	A-n1-A_seed_1	fake	fake
+B	B_seed_1	B_seed_1	chr1	0	100	n1	chrN1	0	100	+	1	unique	B-n1-B_seed_1	fake	fake
+C	C_seed_1	C_seed_1	chr1	0	100	n2	chrN2	0	100	+	1	unique	C-n2-C_seed_1	fake	fake
+D	D_seed_1	D_seed_1	chr1	0	100	n2	chrN2	0	100	+	1	unique	D-n2-D_seed_1	fake	fake
+n1	HMSP00000001	HMSP00000001	chrN1	0	100	root	chrR	0	100	+	1	unique	n1-root-HMSP00000001	fake	fake
+n2	HMSP00000001	HMSP00000001	chrN2	0	100	root	chrR	0	100	+	1	unique	n2-root-HMSP00000001	fake	fake

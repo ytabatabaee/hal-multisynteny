@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import Counter, defaultdict
+from dataclasses import asdict
 from pathlib import Path
 
 from . import __version__
 from .builder import BuildConfig, build_blocks
+from .hal import inspect_hal, write_hal_info
 from .io import (
     read_parent_runs,
     read_runs,
@@ -23,6 +25,8 @@ from .io import (
     write_summary,
 )
 from .reconcile import ReconcileConfig, checksum, reconcile_node
+from .runner import RunTreeConfig, init_leaf_packages, run_tree
+from .tree import build_traversal_plan
 
 
 def _build(args: argparse.Namespace) -> int:
@@ -187,6 +191,60 @@ def _reconcile(args: argparse.Namespace) -> int:
     return 0
 
 
+def _hal_info(args: argparse.Namespace) -> int:
+    info = inspect_hal(args.hal, required_genomes=args.genome or None)
+    write_hal_info(args.output, info)
+    print(f"wrote HAL metadata for {len(info['genomes'])} genomes")
+    return 0
+
+
+def _validate_tree(args: argparse.Namespace) -> int:
+    parent_map = None
+    if args.hal:
+        parent_map = inspect_hal(args.hal)["parent_map"]
+    plan = build_traversal_plan(args.tree, args.node_map, parent_map)
+    output = Path(args.output) if args.output else None
+    payload = {
+        "normalized_newick": plan.normalized_newick,
+        "tree_sha256": plan.tree_sha256,
+        "node_map_sha256": plan.node_map_sha256,
+        "postorder": [asdict(step) for step in plan.steps],
+    }
+    if output:
+        write_summary(output, payload)
+    print(f"valid binary tree: {len(plan.steps)} internal node(s)")
+    return 0
+
+
+def _init_leaves(args: argparse.Namespace) -> int:
+    init_leaf_packages(args.tree, args.node_map, args.leaf_blocks, args.output_dir)
+    print("wrote leaf checkpoints")
+    return 0
+
+
+def _run_tree(args: argparse.Namespace) -> int:
+    run_tree(
+        tree_path=args.tree,
+        node_map_path=args.node_map,
+        leaf_blocks=args.leaf_blocks,
+        output_dir=args.output_dir,
+        config=RunTreeConfig(
+            min_block_length=args.min_block_length,
+            boundary_tolerance=args.boundary_tolerance,
+            max_merge_gap=args.max_merge_gap,
+            copy_id_scope=args.copy_id_scope,
+            resume=args.resume,
+            force_node=args.force_node,
+            dry_run=args.dry_run,
+            backend=args.backend,
+            fake_mappings=args.fake_mappings,
+            hal=args.hal,
+        ),
+    )
+    print("dry-run plan written" if args.dry_run else "tree run complete")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="hal-multisynteny")
     parser.add_argument("--version", action="version", version=__version__)
@@ -226,6 +284,43 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile.add_argument("--copy-id-scope", choices=("local", "global"), default="local")
     reconcile.add_argument("--guide-tree-id")
     reconcile.set_defaults(func=_reconcile)
+
+    hal_info = subparsers.add_parser("hal-info", help="inspect a HAL file and tool environment")
+    hal_info.add_argument("--hal", required=True)
+    hal_info.add_argument("--output", required=True)
+    hal_info.add_argument("--genome", action="append", help="required HAL genome name")
+    hal_info.set_defaults(func=_hal_info)
+
+    validate_tree = subparsers.add_parser("validate-tree", help="validate a rooted binary guide tree")
+    validate_tree.add_argument("--tree", required=True)
+    validate_tree.add_argument("--node-map", required=True)
+    validate_tree.add_argument("--hal", help="optional HAL file for ancestry validation")
+    validate_tree.add_argument("--output", help="optional traversal-plan JSON")
+    validate_tree.set_defaults(func=_validate_tree)
+
+    init_leaves = subparsers.add_parser("init-leaves", help="write leaf checkpoint packages")
+    init_leaves.add_argument("--tree", required=True)
+    init_leaves.add_argument("--node-map", required=True)
+    init_leaves.add_argument("--leaf-blocks", required=True)
+    init_leaves.add_argument("--output-dir", required=True)
+    init_leaves.set_defaults(func=_init_leaves)
+
+    run = subparsers.add_parser("run-tree", help="run checkpointed bottom-up tree reconciliation")
+    run.add_argument("--hal")
+    run.add_argument("--tree", required=True)
+    run.add_argument("--node-map", required=True)
+    run.add_argument("--leaf-blocks", required=True)
+    run.add_argument("--output-dir", required=True)
+    run.add_argument("--min-block-length", type=int, default=50)
+    run.add_argument("--boundary-tolerance", type=int, default=1)
+    run.add_argument("--max-merge-gap", type=int, default=0)
+    run.add_argument("--copy-id-scope", choices=("local", "global"), default="local")
+    run.add_argument("--resume", action="store_true")
+    run.add_argument("--force-node")
+    run.add_argument("--dry-run", action="store_true")
+    run.add_argument("--backend", choices=("fake", "hal"), default="fake")
+    run.add_argument("--fake-mappings")
+    run.set_defaults(func=_run_tree)
     return parser
 
 
@@ -234,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (OSError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         parser.exit(2, f"error: {exc}\n")
     return 1
 
