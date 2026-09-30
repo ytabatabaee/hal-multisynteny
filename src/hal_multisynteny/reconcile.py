@@ -22,6 +22,8 @@ CLASSIFICATIONS = (
     "complex",
 )
 
+COPY_ID_SCOPES = ("local", "global")
+
 
 def _ids(records: Iterable[ParentMappedRun], attribute: str) -> str:
     return ",".join(sorted({getattr(record, attribute) for record in records}))
@@ -33,6 +35,7 @@ class ReconcileConfig:
     boundary_tolerance: int = 1
     max_merge_gap: int = 0
     guide_tree_id: str | None = None
+    copy_id_scope: str = "local"
 
     def __post_init__(self) -> None:
         if self.min_block_length < 1:
@@ -41,6 +44,8 @@ class ReconcileConfig:
             raise ValueError("boundary_tolerance must be non-negative")
         if self.max_merge_gap < 0:
             raise ValueError("max_merge_gap must be non-negative")
+        if self.copy_id_scope not in COPY_ID_SCOPES:
+            raise ValueError(f"copy_id_scope must be one of {list(COPY_ID_SCOPES)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +101,7 @@ class ReconciledOccurrence:
     anc_chrom: str
     anc_start: int
     anc_end: int
+    coverage: str
     source_anchor_id: str
     child_side: str
     child_node: str
@@ -223,29 +229,27 @@ def _order_conflicts(runs: Iterable[ParentMappedRun]) -> set[tuple[str, str, str
     return conflicts
 
 
-def _copy_resolution(records: tuple[ParentMappedRun, ...]) -> tuple[set[str], bool]:
-    usable = [record for record in records if record.status not in {"ambiguous", "unaligned"}]
-    copies = {record.copy_id for record in usable}
-    unique_by_copy = len(copies) == len(usable)
-    return copies, unique_by_copy
-
-
 def _classify(
     left: tuple[ParentMappedRun, ...],
     right: tuple[ParentMappedRun, ...],
     order_conflicts: set[tuple[str, str, str, str]],
+    config: ReconcileConfig,
 ) -> str:
     all_records = left + right
     usable_left = tuple(record for record in left if record.status not in {"ambiguous", "unaligned"})
     usable_right = tuple(record for record in right if record.status not in {"ambiguous", "unaligned"})
-    if any(record.status == "unaligned" for record in all_records) and (
-        not usable_left or not usable_right
-    ):
-        return "unaligned"
-    if any(record.status == "ambiguous" for record in all_records):
-        return "ambiguous"
+
+    ambiguous = any(record.status == "ambiguous" for record in all_records)
+    unaligned = any(record.status == "unaligned" for record in all_records)
+    has_usable = bool(usable_left or usable_right)
     if not usable_left and not usable_right:
+        if ambiguous and unaligned:
+            return "complex"
+        if ambiguous:
+            return "ambiguous"
         return "unaligned"
+    if has_usable and (ambiguous or unaligned):
+        return "complex"
     if usable_left and not usable_right:
         return "left_only"
     if usable_right and not usable_left:
@@ -262,12 +266,19 @@ def _classify(
         for record in usable_left + usable_right
     ):
         conflict_types.append("order_conflict")
-    left_copies, left_unique = _copy_resolution(usable_left)
-    right_copies, right_unique = _copy_resolution(usable_right)
+
     has_candidates = len(usable_left) > 1 or len(usable_right) > 1
-    copies_resolve = left_unique and right_unique and left_copies == right_copies
-    if has_candidates and not copies_resolve:
-        conflict_types.append("duplication_conflict")
+    if has_candidates:
+        copies_resolve = False
+        if config.copy_id_scope == "global":
+            left_copies = {record.copy_id for record in usable_left}
+            right_copies = {record.copy_id for record in usable_right}
+            left_unique = len(left_copies) == len(usable_left)
+            right_unique = len(right_copies) == len(usable_right)
+            copies_resolve = left_unique and right_unique and left_copies == right_copies
+        if not copies_resolve:
+            conflict_types.append("duplication_conflict")
+
     if len(conflict_types) > 1:
         return "complex"
     return conflict_types[0] if conflict_types else "shared_consistent"
@@ -301,7 +312,7 @@ def _sweep_chromosome(
         right_active = tuple(sorted(active["right"].values(), key=_record_sort_key))
         if not left_active and not right_active:
             continue
-        classification = _classify(left_active, right_active, order_conflicts)
+        classification = _classify(left_active, right_active, order_conflicts, config)
         atoms.append(
             _Atom(
                 chrom,
@@ -400,20 +411,36 @@ def _mapping_quality(records: Iterable[ParentMappedRun]) -> str:
     return "unique"
 
 
-def _relationship(record: ParentMappedRun, atoms: list[_Atom], merged: bool) -> str:
+def _relationship(record: ParentMappedRun, group: list[_Atom], atoms: list[_Atom]) -> str:
     if record.status in {"duplicated", "ambiguous", "unaligned"}:
         return record.status
-    covered = sum(
+
+    record_length = record.parent_end - record.parent_start
+    filtered_coverage = sum(
         atom.end - atom.start
         for atom in atoms
+        if not atom.retained and (record in atom.left or record in atom.right)
+    )
+    retained_atoms = [
+        atom for atom in atoms if atom.retained and (record in atom.left or record in atom.right)
+    ]
+    retained_coverage = sum(atom.end - atom.start for atom in retained_atoms)
+    retained_blocks = {atom.block_id for atom in retained_atoms if atom.block_id}
+    group_coverage = sum(
+        atom.end - atom.start
+        for atom in group
         if record in atom.left or record in atom.right
     )
-    if covered < record.parent_end - record.parent_start:
-        return "partial"
-    if merged:
+
+    if filtered_coverage:
+        return "filtered_partial"
+    if len(retained_blocks) > 1:
+        return "split_partial" if retained_coverage < record_length else "split"
+    if len(group) > 1 and sum(record in atom.left or record in atom.right for atom in group) > 1:
         return "merged"
-    containing = sum(record in atom.left or record in atom.right for atom in atoms)
-    return "split" if containing > 1 else "preserved"
+    if group_coverage < record_length:
+        return "split_partial"
+    return "preserved"
 
 
 def _project_occurrences(
@@ -489,21 +516,29 @@ def _project_occurrences(
             status,
         ) = key
         anchors = ",".join(sorted({piece.record.source_anchor_id for piece in pieces}))
+        anc_start = min(piece.parent_start for piece in pieces)
+        anc_end = max(piece.parent_end for piece in pieces)
+        start = min(piece.start for piece in pieces)
+        end = max(piece.end for piece in pieces)
+        if end - start != anc_end - anc_start:
+            raise ValueError("coalesced occurrence lengths disagree between child and parent")
+        coverage = "full" if anc_start == block_start and anc_end == block_end else "partial"
         occurrences.append(
             ReconciledOccurrence(
                 block_id,
                 f"{block_id}.{occurrence_index}",
                 species,
                 chrom,
-                min(piece.start for piece in pieces),
-                max(piece.end for piece in pieces),
+                start,
+                end,
                 strand,
                 copy_id,
                 status,
                 parent_node,
                 parent_chrom,
-                block_start,
-                block_end,
+                anc_start,
+                anc_end,
+                coverage,
                 anchors,
                 side,
                 child_node,
@@ -553,13 +588,16 @@ def reconcile_node(
         )
 
     groups: list[list[_Atom]] = []
+    hit_barrier = False
     for atom in atoms:
         if not atom.retained:
+            hit_barrier = True
             continue
-        if groups and _can_merge(groups[-1][-1], atom, config):
+        if groups and not hit_barrier and _can_merge(groups[-1][-1], atom, config):
             groups[-1].append(atom)
         else:
             groups.append([atom])
+        hit_barrier = False
 
     blocks: list[ParentBlock] = []
     occurrences: list[ReconciledOccurrence] = []
@@ -568,6 +606,9 @@ def reconcile_node(
         block_id = f"HMSP{index:08d}"
         for atom in group:
             atom.block_id = block_id
+
+    for index, group in enumerate(groups, start=1):
+        block_id = f"HMSP{index:08d}"
         records = tuple(
             sorted({record for atom in group for record in atom.left + atom.right}, key=_record_sort_key)
         )
@@ -610,7 +651,7 @@ def reconcile_node(
                     record.child_block_id,
                     record.child_occurrence_id,
                     record.source_anchor_id,
-                    _relationship(record, group, len(group) > 1),
+                    _relationship(record, group, atoms),
                 )
             )
 

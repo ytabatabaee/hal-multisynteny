@@ -57,7 +57,7 @@ An atom can be:
 
 | Classification | Meaning |
 |---|---|
-| `shared_consistent` | Both children provide usable support with compatible orientation and a unique copy pairing. Child block labels need not match. |
+| `shared_consistent` | Both children provide usable support with compatible orientation and no unresolved copy conflict. Child block labels need not match. |
 | `left_only` / `right_only` | Only that child has usable mapped support. This is missing evidence on the other side, not confirmed biological absence. |
 | `orientation_conflict` | Both sides support the interval but their parent-relative orientations disagree. |
 | `order_conflict` | A child occurrence changes parent or descendant chromosome, orientation, or monotonic order across its runs. |
@@ -68,12 +68,27 @@ An atom can be:
 
 `left_only`, `right_only`, `ambiguous`, and `unaligned` must not be interpreted
 as biological absence. Establishing absence requires independent evidence.
-Duplicated alternatives are retained with their copy IDs; the reconciler does
-not pick a paralog. If both sides expose one candidate per copy and their copy
-sets agree, the relationship is uniquely resolvable and can remain
-`shared_consistent`.
+Missing mappings are missing evidence, not confirmed deletions. Usable evidence
+mixed with ambiguous or unaligned alternatives is classified conservatively as
+`complex` so that uncertainty is not collapsed into a simpler label.
 
-Adjacent atoms merge only when the chromosome, classification, child evidence,
+Duplicated alternatives are retained with their copy IDs; the reconciler never
+picks one paralog silently. Copy IDs are local to each child block system by
+default (`--copy-id-scope local`), so matching labels such as `1` and `2` in two
+children do not establish orthology and remain `duplication_conflict`. Use
+`--copy-id-scope global` only when the input producer guarantees comparable
+copy labels across child systems. Under `global`, duplicated candidates can
+resolve only when each copy occurs exactly once on each side, the copy sets
+match, and orientation/order checks are compatible.
+
+Filtered atoms containing evidence are hard block boundaries. A retained atom on
+one side of a below-threshold interval never merges with a retained atom on the
+other side, regardless of `--max-merge-gap`, boundary tolerance, or matching
+membership. The filtered atom remains in `atomic_intervals.tsv` with
+`disposition=filtered`, `merge_reason=below_min_block_length`, and an empty
+`final_parent_block_id`.
+
+Adjacent retained atoms merge only when the chromosome, classification, child evidence,
 orientation, copy relationship, and descendant projections are compatible.
 Exact membership can merge across a gap no larger than `--max-merge-gap`.
 `--boundary-tolerance` additionally permits a short boundary atom to join a
@@ -82,12 +97,15 @@ continuation. It cannot cross a classification, orientation, order, copy, or
 chromosome change. The atomic table keeps every original cut and records the
 merge decision.
 
-For a binary tree with `n` leaves, a future runner will map across `2n-2` edges,
-which is linear in the number of leaves. This release only performs one node.
-Its boundary sorting costs `O(r log r)` time for `r` runs on a chromosome and
-the sweep uses memory proportional to that chromosome's runs and output atoms.
-Chromosomes are independent and form a natural future sharding boundary. These
-properties and synthetic tests do not establish full VGP-scale performance.
+For a binary tree with `n` leaves, a future runner would need to map across tree
+edges, but this release only performs one parent node. For `r` runs on one
+parent chromosome, boundary sorting costs `O(r log r)`. The sweep then
+materializes and sorts active left/right membership for each emitted atomic
+interval, so total runtime also depends on the sum of active-set sizes and on
+output table size. Memory is proportional to that chromosome's runs, active
+state, retained groups, and emitted records. Chromosomes are independent and
+form a natural future sharding boundary. These properties and synthetic tests
+do not establish VGP-scale performance.
 
 ## Installation
 
@@ -166,6 +184,7 @@ hal-multisynteny reconcile-node \
   --min-block-length 50 \
   --boundary-tolerance 1 \
   --max-merge-gap 0 \
+  --copy-id-scope local \
   --guide-tree-id cactus-tree-sha256:example
 ```
 
@@ -182,8 +201,11 @@ schema planned for `hal-site-evaluator`.
 Reconciliation writes `blocks.tsv`, `occurrences.tsv`,
 `atomic_intervals.tsv`, `provenance.tsv`, `conflicts.tsv`, and `summary.json`.
 The occurrence table retains the evaluator-compatible columns plus child-side,
-child-node, child-block, and child-occurrence provenance. The summary records
-parameters, child ordering, guide-tree identifier, SHA-256 input checksums,
+child-node, child-block, and child-occurrence provenance. Each occurrence's
+ancestral coordinates describe the represented portion of the parent block, not
+necessarily the full parent block; the `coverage` column is `full` or `partial`.
+The summary records parameters, including copy-ID scope, child ordering,
+guide-tree identifier, SHA-256 input checksums,
 classification counts and coverage, mapping-status fractions, and output names.
 
 ## Scientific interpretation
@@ -222,6 +244,10 @@ Use `--guide-tree-id` for a stable identifier or checksum. This package does
 not add a label-independent evaluator; `hal-site-evaluator` remains the place
 for cross-run correspondence analysis.
 
+Open questions about `halSynteny` query/target reversal, ancestor composition,
+duplication, PSL information loss, and tiny fixture requirements are tracked in
+[`docs/HALSYNTENY_CONSISTENCY.md`](docs/HALSYNTENY_CONSISTENCY.md).
+
 ## Roadmap
 
 ### 0.3: HAL extraction and tree runner
@@ -255,8 +281,8 @@ python -m build
 
 The tests are synthetic and need no HAL installation. They cover shared and
 one-sided blocks, boundary mismatches, splits and merges, inversions,
-translocations, duplication resolution, ambiguity, unaligned evidence,
-filtering, deterministic byte output, left/right exchange, occurrence
+translocations, local/global copy-ID scope, ambiguity, unaligned evidence,
+filtered-atom barriers, deterministic byte output, left/right exchange, occurrence
 propagation, CLI failures, and legacy `build` behavior.
 
 ## License

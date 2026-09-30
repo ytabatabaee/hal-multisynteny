@@ -100,6 +100,7 @@ def _reconcile(args: argparse.Namespace) -> int:
         min_block_length=args.min_block_length,
         boundary_tolerance=args.boundary_tolerance,
         max_merge_gap=args.max_merge_gap,
+        copy_id_scope=args.copy_id_scope,
         guide_tree_id=args.guide_tree_id,
     )
     result = reconcile_node(
@@ -151,6 +152,7 @@ def _reconcile(args: argparse.Namespace) -> int:
                 "min_block_length": args.min_block_length,
                 "boundary_tolerance": args.boundary_tolerance,
                 "max_merge_gap": args.max_merge_gap,
+                "copy_id_scope": args.copy_id_scope,
             },
             "input_checksums": {
                 "left_sha256": checksum(left_path.read_bytes()),
@@ -221,6 +223,7 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile.add_argument("--min-block-length", type=int, default=50)
     reconcile.add_argument("--boundary-tolerance", type=int, default=1)
     reconcile.add_argument("--max-merge-gap", type=int, default=0)
+    reconcile.add_argument("--copy-id-scope", choices=("local", "global"), default="local")
     reconcile.add_argument("--guide-tree-id")
     reconcile.set_defaults(func=_reconcile)
     return parser

@@ -65,6 +65,149 @@ def classifications(result):
     return [atom.classification for atom in result.atomic_intervals]
 
 
+def assert_occurrence_invariants(result):
+    blocks = {block.block_id: block for block in result.blocks}
+    for occurrence in result.occurrences:
+        block = blocks[occurrence.block_id]
+        assert occurrence.end > occurrence.start
+        assert occurrence.anc_end > occurrence.anc_start
+        assert occurrence.end - occurrence.start == occurrence.anc_end - occurrence.anc_start
+        assert block.parent_start <= occurrence.anc_start
+        assert occurrence.anc_end <= block.parent_end
+        expected = (
+            "full"
+            if occurrence.anc_start == block.parent_start and occurrence.anc_end == block.parent_end
+            else "partial"
+        )
+        assert occurrence.coverage == expected
+
+
+def normalize_result(result, *, exchange=False):
+    def side(value):
+        if not exchange:
+            return value
+        return {"left": "right", "right": "left"}.get(value, value)
+
+    def child_node(value):
+        return side(value)
+
+    def species(value):
+        return side(value)
+
+    def anchor(value):
+        if not exchange:
+            return value
+        if value.startswith("left-"):
+            return "right-" + value[len("left-") :]
+        if value.startswith("right-"):
+            return "left-" + value[len("right-") :]
+        return value
+
+    def classification(value):
+        if not exchange:
+            return value
+        return {"left_only": "right_only", "right_only": "left_only"}.get(value, value)
+
+    def ids(value):
+        return tuple(filter(None, value.split(",")))
+
+    blocks = tuple(
+        sorted(
+            (
+                block.parent_node,
+                block.parent_chrom,
+                block.parent_start,
+                block.parent_end,
+                classification(block.classification),
+                ids(block.right_block_ids if exchange else block.left_block_ids),
+                ids(block.left_block_ids if exchange else block.right_block_ids),
+                block.species_count,
+                block.occurrence_count,
+                block.copy_count,
+                block.mapping_quality,
+                block.atomic_interval_count,
+            )
+            for block in result.blocks
+        )
+    )
+    occurrences = tuple(
+        sorted(
+            (
+                side(row.child_side),
+                species(row.species),
+                row.chrom,
+                row.start,
+                row.end,
+                row.strand,
+                row.copy_id,
+                row.status,
+                row.ancestor,
+                row.anc_chrom,
+                row.anc_start,
+                row.anc_end,
+                row.coverage,
+                child_node(row.child_node),
+                row.child_block_id,
+                row.child_occurrence_id,
+            )
+            for row in result.occurrences
+        )
+    )
+    conflicts = tuple(
+        sorted(
+            (
+                row.parent_chrom,
+                row.parent_start,
+                row.parent_end,
+                classification(row.conflict_type),
+                ids(row.right_block_ids if exchange else row.left_block_ids),
+                ids(row.left_block_ids if exchange else row.right_block_ids),
+                ids(row.right_copies if exchange else row.left_copies),
+                ids(row.left_copies if exchange else row.right_copies),
+                row.resolution,
+            )
+            for row in result.conflicts
+        )
+    )
+    provenance = tuple(
+        sorted(
+            (
+                side(row.child_side),
+                child_node(row.child_node),
+                row.child_block_id,
+                row.child_occurrence_id,
+                anchor(row.source_anchor_id),
+                row.relationship,
+            )
+            for row in result.provenance
+        )
+    )
+    atoms = tuple(
+        sorted(
+            (
+                row.parent_chrom,
+                row.parent_start,
+                row.parent_end,
+                classification(row.classification),
+                ids(row.right_block_ids if exchange else row.left_block_ids),
+                ids(row.left_block_ids if exchange else row.right_block_ids),
+                row.disposition,
+                row.merge_reason,
+            )
+            for row in result.atomic_intervals
+        )
+    )
+    return {
+        "blocks": blocks,
+        "occurrences": occurrences,
+        "conflicts": conflicts,
+        "provenance": provenance,
+        "atoms": atoms,
+        "splits": result.splits,
+        "merges": result.merges,
+    }
+
+
 def test_project_run_to_parent_block_slices_child_coordinates():
     forward = mapped("left", "L", "l", 0, 100, start=1000)
     forward_piece = _project_run_to_parent_block(forward, 25, 75)
@@ -120,7 +263,7 @@ def test_split_and_merge_relationships_are_preserved():
     right = [mapped("right", "R1", "r1", 0, 50), mapped("right", "R2", "r2", 50, 100)]
     result = reconcile(left, right)
     assert len(result.blocks) == 2
-    assert {row.relationship for row in result.provenance if row.child_side == "left"} == {"partial"}
+    assert {row.relationship for row in result.provenance if row.child_side == "left"} == {"split"}
     swapped = reconcile(
         [mapped("left", "L1", "l1", 0, 50), mapped("left", "L2", "l2", 50, 100)],
         [mapped("right", "R", "r", 0, 100)],
@@ -173,6 +316,75 @@ def test_projected_pieces_with_internal_child_gap_are_not_silently_spanned():
     ]
 
 
+def test_partial_occurrence_uses_its_own_parent_span_in_merged_block():
+    result = reconcile(
+        [
+            mapped("left", "L1", "l1", 0, 50, start=1000),
+            mapped("left", "L2", "l2", 50, 100, start=1050),
+        ],
+        [mapped("right", "R", "r", 0, 100, start=2000)],
+        boundary_tolerance=50,
+    )
+    assert len(result.blocks) == 1
+    partial = [row for row in result.occurrences if row.child_side == "left"]
+    assert [(row.anc_start, row.anc_end, row.start, row.end, row.coverage) for row in partial] == [
+        (0, 50, 1000, 1050, "partial"),
+        (50, 100, 1050, 1100, "partial"),
+    ]
+    assert_occurrence_invariants(result)
+
+
+def test_partial_reverse_occurrence_uses_its_own_parent_span_in_merged_block():
+    result = reconcile(
+        [
+            mapped("left", "L1", "l1", 0, 50, start=1050, strand="-"),
+            mapped("left", "L2", "l2", 50, 100, start=1000, strand="-"),
+        ],
+        [mapped("right", "R", "r", 0, 100, start=2000, strand="-")],
+        boundary_tolerance=50,
+    )
+    assert len(result.blocks) == 1
+    partial = [row for row in result.occurrences if row.child_side == "left"]
+    assert [(row.anc_start, row.anc_end, row.start, row.end, row.coverage) for row in partial] == [
+        (0, 50, 1050, 1100, "partial"),
+        (50, 100, 1000, 1050, "partial"),
+    ]
+    assert_occurrence_invariants(result)
+
+
+def test_collinear_projected_pieces_coalesce_in_merged_block():
+    result = reconcile(
+        [
+            mapped("left", "L", "l", 0, 50, start=1000, anchor="left-a"),
+            mapped("left", "L", "l", 50, 100, start=1050, anchor="left-b"),
+        ],
+        [mapped("right", "R", "r", 0, 100, start=2000)],
+        boundary_tolerance=50,
+    )
+    left_occurrences = [row for row in result.occurrences if row.child_side == "left"]
+    assert [(row.anc_start, row.anc_end, row.start, row.end, row.source_anchor_id) for row in left_occurrences] == [
+        (0, 100, 1000, 1100, "left-a,left-b"),
+    ]
+    assert_occurrence_invariants(result)
+
+
+def test_gapped_projected_pieces_stay_separate_in_merged_block():
+    result = reconcile(
+        [
+            mapped("left", "L", "l", 0, 50, start=1000, anchor="left-a"),
+            mapped("left", "L", "l", 50, 100, start=1060, anchor="left-b"),
+        ],
+        [mapped("right", "R", "r", 0, 100, start=2000)],
+        boundary_tolerance=50,
+    )
+    left_occurrences = [row for row in result.occurrences if row.child_side == "left"]
+    assert [(row.anc_start, row.anc_end, row.start, row.end, row.source_anchor_id) for row in left_occurrences] == [
+        (0, 50, 1000, 1050, "left-a"),
+        (50, 100, 1060, 1110, "left-b"),
+    ]
+    assert_occurrence_invariants(result)
+
+
 def test_inversion_is_orientation_conflict_and_prevents_merge():
     result = reconcile(
         [mapped("left", "L", "l", 0, 100)],
@@ -194,12 +406,12 @@ def test_translocation_within_occurrence_is_order_conflict():
     assert set(classifications(reconcile(left, right))) == {"order_conflict"}
 
 
-def test_unaligned_is_missing_evidence():
+def test_usable_plus_unaligned_is_complex():
     result = reconcile(
         [mapped("left", "L", "l", 0, 100)],
         [mapped("right", "R", "r", 0, 100, status="unaligned")],
     )
-    assert classifications(result) == ["unaligned"]
+    assert classifications(result) == ["complex"]
 
 
 def test_left_only_right_only_and_partial_coverage():
@@ -219,7 +431,7 @@ def test_one_sided_duplication_is_unresolved():
     assert classifications(reconcile(left, right)) == ["duplication_conflict"]
 
 
-def test_duplication_on_both_sides_resolves_by_copy_id():
+def test_matching_local_copy_ids_remain_duplication_conflict():
     left = [
         mapped("left", "L", "l1", 0, 100, copy="1", status="duplicated"),
         mapped("left", "L", "l2", 0, 100, copy="2", status="duplicated", start=200),
@@ -229,30 +441,93 @@ def test_duplication_on_both_sides_resolves_by_copy_id():
         mapped("right", "R", "r2", 0, 100, copy="2", status="duplicated", start=600),
     ]
     result = reconcile(left, right)
+    assert classifications(result) == ["duplication_conflict"]
+    assert len(result.occurrences) == 4
+
+
+def test_matching_global_copy_ids_can_resolve_duplication():
+    left = [
+        mapped("left", "L", "l1", 0, 100, copy="1", status="duplicated"),
+        mapped("left", "L", "l2", 0, 100, copy="2", status="duplicated", start=200),
+    ]
+    right = [
+        mapped("right", "R", "r1", 0, 100, copy="1", status="duplicated", start=400),
+        mapped("right", "R", "r2", 0, 100, copy="2", status="duplicated", start=600),
+    ]
+    result = reconcile(left, right, copy_id_scope="global")
     assert classifications(result) == ["shared_consistent"]
     assert len(result.occurrences) == 4
 
 
-def test_many_to_many_without_matching_copy_ids_is_duplication_conflict():
+def test_nonmatching_global_copy_ids_remain_duplication_conflict():
     left = [mapped("left", "L", f"l{i}", 0, 10, copy=str(i), status="duplicated") for i in (1, 2)]
     right = [mapped("right", "R", f"r{i}", 0, 10, copy=str(i), status="duplicated") for i in (2, 3)]
-    assert classifications(reconcile(left, right)) == ["duplication_conflict"]
+    assert classifications(reconcile(left, right, copy_id_scope="global")) == ["duplication_conflict"]
 
 
-def test_ambiguous_and_complex_classifications():
-    ambiguous = reconcile(
-        [mapped("left", "L", "l", 0, 10, status="ambiguous")],
-        [mapped("right", "R", "r", 0, 10)],
-    )
-    assert classifications(ambiguous) == ["ambiguous"]
-    complex_result = reconcile(
+def test_duplication_plus_orientation_conflict_is_complex():
+    result = reconcile(
         [
             mapped("left", "L", "l1", 0, 10, copy="1", status="duplicated"),
-            mapped("left", "L", "l2", 0, 10, copy="2", status="duplicated", strand="-"),
+            mapped("left", "L", "l2", 0, 10, copy="2", status="duplicated", start=20),
+        ],
+        [mapped("right", "R", "r", 0, 10, strand="-")],
+    )
+    assert classifications(result) == ["complex"]
+
+
+def test_missing_quality_classifications_are_conservative():
+    ambiguous_only = reconcile(
+        [mapped("left", "L", "l", 0, 10, status="ambiguous")],
+        [],
+    )
+    assert classifications(ambiguous_only) == ["ambiguous"]
+
+    unaligned_only = reconcile(
+        [mapped("left", "L", "l", 0, 10, status="unaligned")],
+        [],
+    )
+    assert classifications(unaligned_only) == ["unaligned"]
+
+    one_sided = reconcile([mapped("left", "L", "l", 0, 10)], [])
+    assert classifications(one_sided) == ["left_only"]
+
+    usable_plus_ambiguous = reconcile(
+        [
+            mapped("left", "L", "l", 0, 10),
+            mapped("left", "Lalt", "la", 0, 10, status="ambiguous", start=20),
         ],
         [mapped("right", "R", "r", 0, 10)],
     )
-    assert classifications(complex_result) == ["complex"]
+    assert classifications(usable_plus_ambiguous) == ["complex"]
+
+    usable_plus_unaligned = reconcile(
+        [
+            mapped("left", "L", "l", 0, 10),
+            mapped("left", "Lalt", "la", 0, 10, status="unaligned", start=20),
+        ],
+        [mapped("right", "R", "r", 0, 10)],
+    )
+    assert classifications(usable_plus_unaligned) == ["complex"]
+
+    both_sides_plus_ambiguous = reconcile(
+        [mapped("left", "L", "l", 0, 10)],
+        [
+            mapped("right", "R", "r", 0, 10),
+            mapped("right", "Ralt", "ra", 0, 10, status="ambiguous", start=20),
+        ],
+    )
+    assert classifications(both_sides_plus_ambiguous) == ["complex"]
+
+    duplication_plus_ambiguous = reconcile(
+        [
+            mapped("left", "L", "l1", 0, 10, copy="1", status="duplicated"),
+            mapped("left", "L", "l2", 0, 10, copy="2", status="duplicated", start=20),
+            mapped("left", "Lalt", "la", 0, 10, status="ambiguous", start=40),
+        ],
+        [mapped("right", "R", "r", 0, 10)],
+    )
+    assert classifications(duplication_plus_ambiguous) == ["complex"]
 
 
 def test_collinear_atoms_merge_but_orientation_boundary_does_not():
@@ -268,6 +543,39 @@ def test_collinear_atoms_merge_but_orientation_boundary_does_not():
         boundary_tolerance=50,
     )
     assert len(mergeable.blocks) == 1
+
+
+def test_filtered_atoms_are_hard_merge_barriers():
+    left = [
+        mapped("left", "L", "l", 0, 105, start=1000),
+        mapped("left", "LX", "lx", 50, 55, status="ambiguous", start=2000),
+    ]
+    right = [mapped("right", "R", "r", 0, 105, start=3000)]
+    for tolerance in (0, 10):
+        result = reconcile_node(
+            left,
+            right,
+            parent_node="parent",
+            left_node="left",
+            right_node="right",
+            config=ReconcileConfig(
+                min_block_length=10,
+                boundary_tolerance=tolerance,
+                max_merge_gap=100,
+            ),
+        )
+        assert [(block.parent_start, block.parent_end) for block in result.blocks] == [
+            (0, 50),
+            (55, 105),
+        ]
+        assert [
+            (atom.parent_start, atom.parent_end, atom.disposition, atom.merge_reason, atom.final_parent_block_id)
+            for atom in result.atomic_intervals
+        ] == [
+            (0, 50, "retained", "not_merged", "HMSP00000001"),
+            (50, 55, "filtered", "below_min_block_length", ""),
+            (55, 105, "retained", "not_merged", "HMSP00000002"),
+        ]
 
 
 def test_minimum_length_filter_and_empty_side():
@@ -300,9 +608,8 @@ def test_determinism_permutation_swap_and_nonoverlap():
         [mapped("left", "R", "r", 0, 100)],
         [mapped("right", "L2", "l2", 50, 100), mapped("right", "L1", "l1", 0, 50)],
     )
-    assert [(a.parent_start, a.parent_end) for a in first.atomic_intervals] == [
-        (a.parent_start, a.parent_end) for a in swapped.atomic_intervals
-    ]
+    assert normalize_result(first) == normalize_result(swapped, exchange=True)
+    assert_occurrence_invariants(first)
 
 
 def test_duplicate_occurrence_rows_are_coalesced_without_losing_anchors():
@@ -371,6 +678,7 @@ def test_cli_outputs_summary_and_byte_repeatability(tmp_path):
         assert summary["version"] == "0.2.0"
         assert summary["counts"]["blocks"] == 1
         assert summary["guide_tree_id"] == "tree-sha256:example"
+        assert summary["parameters"]["copy_id_scope"] == "local"
     assert generated[0] == generated[1]
 
 
