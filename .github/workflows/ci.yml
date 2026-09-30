@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check .
+      - name: Tests without HAL
+        run: pytest -m "not hal"
+      - name: Build package
+        run: python -m build
+
+  hal-integration:
+    name: Tiny HAL integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: hal-ci
+          create-args: >-
+            python=3.12
+            pip
+            hal=2.3.0
+          channels: conda-forge,bioconda
+          channel-priority: strict
+      - name: Install package
+        shell: bash -el {0}
+        run: |
+          micromamba run -n hal-ci python -m pip install --upgrade pip
+          micromamba run -n hal-ci python -m pip install -e ".[dev]"
+      - name: Confirm HAL tools
+        shell: bash -el {0}
+        run: |
+          micromamba run -n hal-ci bash -lc 'command -v halStats && command -v halLiftover && command -v maf2hal'
+          micromamba run -n hal-ci bash -lc 'halStats --version || true; halLiftover --version || true; maf2hal --version || true'
+      - name: Build tiny HAL fixture
+        shell: bash -el {0}
+        run: micromamba run -n hal-ci scripts/build_tiny_hal_fixture.sh
+      - name: Run HAL integration tests
+        shell: bash -el {0}
+        run: micromamba run -n hal-ci pytest -m hal
+      - name: Run local tiny HAL integration smoke
+        shell: bash -el {0}
+        run: micromamba run -n hal-ci scripts/run_tiny_hal_integration.sh hal-ci-output
+      - name: Upload HAL failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiny-hal-debug
+          path: |
+            tests/fixtures/tiny_hal/build/
+            hal-ci-output/
+            .pytest_cache/

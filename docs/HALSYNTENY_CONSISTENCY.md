@@ -122,3 +122,20 @@ normally yields PSL-like pairwise blocks, whereas MAF2Synteny consumes alignment
 blocks. Creating artificial MAF solely to invoke it would discard or invent
 semantics. A future adapter can be evaluated only if a genuine alignment-block
 extraction layer becomes available.
+
+## Version 0.3 tiny-HAL validation
+
+Version 0.3.1 adds a reproducible tiny-HAL validation path. The fixture is built
+from synthetic MAF sources using `maf2hal` and has four leaves under two named
+ancestors and a root. Its purpose is to test the mechanics of direct parent
+`halLiftover`, node-map translation, nonspatial unmapped evidence, checkpointed
+bottom-up traversal, and split/gapped BED behavior.
+
+This validation does not settle the broader `halSynteny` consistency questions.
+In particular, BED6 liftover output can show target fragments without proving
+which source subinterval each fragment represents. The current extractor
+therefore rejects split/gapped rows unless a future HAL API backend can preserve
+that correspondence. Missing liftover output remains missing/unaligned evidence,
+not biological absence. The workflow remains guide-tree dependent, and passing
+tiny fixtures does not imply VGP-scale performance or a replacement for
+MAF2Synteny.

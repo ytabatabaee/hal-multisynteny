@@ -1,0 +1,12 @@
+# Python/build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+
+# Generated tiny-HAL fixtures and local integration outputs
+tests/fixtures/tiny_hal/build/
+tiny-hal-output/
+hal-ci-output/

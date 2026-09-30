@@ -57,15 +57,40 @@ class FakeEdgeExtractor:
         parent_hal_genome: str,
         child_blocks: Iterable[NodeBlock],
     ) -> EdgeExtractionResult:
-        block_ids = {block.block_id for block in child_blocks}
+        blocks = tuple(child_blocks)
+        block_ids = {block.block_id for block in blocks}
+        edge_runs = tuple(
+            run
+            for run in self._runs
+            if run.child_node == child_node_id and run.parent_node == parent_node_id
+        )
+        unknown = sorted({run.child_block_id for run in edge_runs} - block_ids)
+        if unknown:
+            raise ExtractionError(
+                "fake mapping table contains row(s) for unknown block(s) on "
+                f"{child_node_id}->{parent_node_id}: {', '.join(unknown)}"
+            )
+        seen_rows: set[EdgeMappingRun] = set()
+        seen_anchor: dict[str, EdgeMappingRun] = {}
+        for run in edge_runs:
+            if run in seen_rows:
+                raise ExtractionError(
+                    "fake mapping table contains a duplicate row for "
+                    f"{child_node_id}->{parent_node_id} block {run.child_block_id}"
+                )
+            seen_rows.add(run)
+            previous = seen_anchor.get(run.source_anchor_id)
+            if previous is not None and previous != run:
+                raise ExtractionError(
+                    "fake mapping table contains contradictory rows for source anchor "
+                    f"{run.source_anchor_id!r}"
+                )
+            seen_anchor[run.source_anchor_id] = run
         runs = tuple(
             sorted(
                 (
                     run
-                    for run in self._runs
-                    if run.child_node == child_node_id
-                    and run.parent_node == parent_node_id
-                    and run.child_block_id in block_ids
+                    for run in edge_runs
                 ),
                 key=lambda run: (
                     run.parent_chrom,
@@ -77,9 +102,27 @@ class FakeEdgeExtractor:
                 ),
             )
         )
+        mapped = {run.child_block_id for run in runs}
+        unmapped = tuple(
+            UnmappedEdgeEvidence(
+                child_node_id,
+                parent_node_id,
+                block.block_id,
+                block.chrom,
+                block.start,
+                block.end,
+                "unaligned",
+                "fake mapping table has no parent interval for this child block",
+                f"{child_node_id}:{block.block_id}:fake:unaligned",
+                "fake",
+                str(self.mapping_path),
+            )
+            for block in sorted(blocks, key=lambda row: (row.chrom, row.start, row.end, row.block_id))
+            if block.block_id not in mapped
+        )
         return EdgeExtractionResult(
             runs,
-            (),
+            unmapped,
             "fake",
             {"fake": "1"},
             ((str(self.mapping_path),),),
@@ -245,12 +288,26 @@ class HalEdgeExtractor:
             block = by_id[name]
             distinct = sorted(set(rows), key=lambda row: row[0])
             interval_length = block.end - block.start
-            for _line_number, _chrom, parent_start, parent_end, _strand in distinct:
+            bad_fragments = []
+            for line_number, chrom, parent_start, parent_end, strand in distinct:
                 if parent_end - parent_start != interval_length:
-                    raise ExtractionError(
-                        "halLiftover BED output contains a shorter or gapped fragment for "
-                        f"{name}; exact source subinterval reconstruction requires a richer HAL API backend"
-                    )
+                    bad_fragments.append((line_number, chrom, parent_start, parent_end, strand))
+            if bad_fragments:
+                fragments = "; ".join(
+                    f"line {line}: {chrom}:{start}-{end}({strand}) length={end - start}"
+                    for line, chrom, start, end, strand in bad_fragments
+                )
+                all_fragments = "; ".join(
+                    f"line {line}: {chrom}:{start}-{end}({strand}) length={end - start}"
+                    for line, chrom, start, end, strand in distinct
+                )
+                raise ExtractionError(
+                    "halLiftover BED output contains shorter or gapped fragment(s) for "
+                    f"block {name}; source_length={interval_length}; "
+                    f"rejected_fragments=[{fragments}]; all_returned_fragments=[{all_fragments}]; "
+                    "BED6 output does not establish exact source subinterval coordinates, "
+                    "so exact reconstruction requires a richer HAL API backend"
+                )
             unique_mappings = sorted(
                 {(chrom, start, end, strand) for _line, chrom, start, end, strand in distinct}
             )

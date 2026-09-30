@@ -1,5 +1,21 @@
 # Changelog
 
+## Next validation milestone - Unreleased
+
+- Add GitHub Actions CI for Python 3.10, 3.11, and 3.12, plus a dedicated HAL
+  integration job that builds the tiny fixture and runs HAL-marked tests.
+- Add reproducible tiny-HAL fixture sources, a fixture builder, local integration
+  smoke script, and manifest-driven real-HAL tests.
+- Add `audit-liftover` to classify raw `halLiftover` BED output as full-length,
+  multi-mapping, unmapped, split, length-changed, or invalid while preserving
+  raw fragments.
+- Make the fake backend semantically match the HAL backend by emitting explicit
+  unmapped evidence for missing block rows and rejecting unknown, duplicate, or
+  contradictory requested-edge rows.
+- Document current real-HAL limitations: split/gapped BED6 output is audited but
+  not reconstructed, missing mapping is not absence, and the tiny fixture does
+  not prove VGP-scale readiness or MAF2Synteny replacement.
+
 ## 0.3.1 - 2026-09-30
 
 - Separate logical guide-tree node IDs from HAL genome names during extraction;

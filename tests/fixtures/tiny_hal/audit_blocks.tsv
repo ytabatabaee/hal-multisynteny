@@ -1,0 +1,5 @@
+block_id	chrom	start	end
+A_unique	chrA	0	10
+A_inversion	chrA	10	20
+A_unmapped	chrA	40	50
+A_split	chrA	60	80

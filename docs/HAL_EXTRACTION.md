@@ -48,3 +48,34 @@ duplication.
 
 Future work may replace the BED parser with a HAL C++/Python API backend if that
 is required to preserve exact gapped correspondence.
+
+## Tiny-HAL validation milestone
+
+The repository includes a reproducible tiny-HAL fixture protocol under
+`tests/fixtures/tiny_hal/` and `scripts/build_tiny_hal_fixture.sh`. The fixture
+is generated from checked-in synthetic MAF files with `maf2hal`; the repository
+does not commit the generated HAL file. Logical guide-tree IDs intentionally
+differ from HAL genome names so integration tests verify node-map translation.
+
+The fixture is designed to audit these `halLiftover` behaviors before real-data
+pilots:
+
+- exact unique whole-interval mapping;
+- reverse-strand/inverted mapping;
+- no returned mapping, recorded as nonspatial unaligned evidence;
+- split or gapped BED output that is rejected by the extractor when exact source
+  subinterval coordinates are not available;
+- current lack of a proven genuine duplication case from the hand-written MAF
+  fixture.
+
+`hal-multisynteny audit-liftover` records raw BED output for every input block
+and classifies each block as `unique_full_length`, `multi_full_length`,
+`unmapped`, `split`, `gapped_or_length_changed`, or `invalid_output`. The audit
+preserves rejected fragments and writes HAL/tool versions, the exact command,
+the HAL checksum, and count/fraction summaries. It does not infer source
+subinterval coordinates from BED6 fragments.
+
+Successful tiny fixtures establish only that the extraction boundary, manifests,
+checkpoint reuse, and conservative rejection behavior work on small synthetic
+cases. They do not demonstrate biological correctness on real clades, VGP-scale
+performance, or equivalence to MAF2Synteny.

@@ -1,0 +1,8 @@
+leaf	block_id	chrom	start	end	strand	copy_id	status	source
+A	A_unique	chrA	0	10	+	1	unique	tiny-hal
+A	A_inversion	chrA	10	20	+	1	unique	tiny-hal
+A	A_unmapped	chrA	40	50	+	1	unique	tiny-hal
+B	B_unique	chrB	0	10	+	1	unique	tiny-hal
+B	B_inversion	chrB	10	20	+	1	unique	tiny-hal
+C	C_unique	chrC	0	10	+	1	unique	tiny-hal
+D	D_unique	chrD	0	10	+	1	unique	tiny-hal

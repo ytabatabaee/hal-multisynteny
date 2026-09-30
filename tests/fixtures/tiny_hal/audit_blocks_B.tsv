@@ -1,0 +1,3 @@
+block_id	chrom	start	end
+B_unique	chrB	0	10
+B_inversion	chrB	10	20

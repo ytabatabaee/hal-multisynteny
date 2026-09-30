@@ -1,0 +1,112 @@
+{
+  "audit_blocks": "audit_blocks.tsv",
+  "audit_edges": [
+    {
+      "blocks": "audit_blocks.tsv",
+      "child": "HAL_A",
+      "label": "A_to_ancAB",
+      "parent": "HAL_ancAB"
+    },
+    {
+      "blocks": "audit_blocks_B.tsv",
+      "child": "HAL_B",
+      "label": "B_to_ancAB",
+      "parent": "HAL_ancAB"
+    },
+    {
+      "blocks": "audit_blocks_C.tsv",
+      "child": "HAL_C",
+      "label": "C_to_ancCD",
+      "parent": "HAL_ancCD"
+    },
+    {
+      "blocks": "audit_blocks_D.tsv",
+      "child": "HAL_D",
+      "label": "D_to_ancCD",
+      "parent": "HAL_ancCD"
+    },
+    {
+      "blocks": "audit_blocks_ancAB.tsv",
+      "child": "HAL_ancAB",
+      "label": "ancAB_to_root",
+      "parent": "HAL_root"
+    },
+    {
+      "blocks": "audit_blocks_ancCD.tsv",
+      "child": "HAL_ancCD",
+      "label": "ancCD_to_root",
+      "parent": "HAL_root"
+    }
+  ],
+  "cases": [
+    {
+      "block_id": "A_unique",
+      "child_hal_genome": "HAL_A",
+      "child_node_id": "A",
+      "chrom": "chrA",
+      "end": 10,
+      "expect": "spatial",
+      "name": "unique_collinear_A_to_ancAB",
+      "parent_hal_genome": "HAL_ancAB",
+      "parent_node_id": "ancAB",
+      "start": 0,
+      "statuses": [
+        "unique"
+      ],
+      "strands": [
+        "+"
+      ]
+    },
+    {
+      "block_id": "A_inversion",
+      "child_hal_genome": "HAL_A",
+      "child_node_id": "A",
+      "chrom": "chrA",
+      "end": 20,
+      "expect": "spatial",
+      "name": "inversion_A_to_ancAB",
+      "parent_hal_genome": "HAL_ancAB",
+      "parent_node_id": "ancAB",
+      "start": 10,
+      "statuses": [
+        "unique"
+      ],
+      "strands": [
+        "-"
+      ]
+    },
+    {
+      "block_id": "A_unmapped",
+      "child_hal_genome": "HAL_A",
+      "child_node_id": "A",
+      "chrom": "chrA",
+      "end": 50,
+      "expect": "unaligned",
+      "name": "unmapped_A_to_ancAB",
+      "parent_hal_genome": "HAL_ancAB",
+      "parent_node_id": "ancAB",
+      "start": 40
+    },
+    {
+      "block_id": "A_split",
+      "child_hal_genome": "HAL_A",
+      "child_node_id": "A",
+      "chrom": "chrA",
+      "end": 80,
+      "expect_error": "shorter or gapped",
+      "name": "split_or_gapped_A_to_ancAB",
+      "parent_hal_genome": "HAL_ancAB",
+      "parent_node_id": "ancAB",
+      "start": 60
+    }
+  ],
+  "expected_limitations": [
+    "No genuine duplicated real-HAL assertion is claimed for this hand-written MAF fixture until HAL duplicate-edge behavior is verified with a richer fixture."
+  ],
+  "hal": "build/tiny.hal",
+  "leaf_blocks": "leaf-blocks",
+  "node_map": "node-map.tsv",
+  "topology": "((HAL_A,HAL_B)HAL_ancAB,(HAL_C,HAL_D)HAL_ancCD)HAL_root;",
+  "traversal_leaf_blocks": "leaf-blocks-traversal",
+  "tree": "tree.nwk"
+}

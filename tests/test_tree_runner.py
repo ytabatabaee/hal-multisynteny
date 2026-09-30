@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from hal_multisynteny.audit import audit_liftover
 from hal_multisynteny.cli import main
-from hal_multisynteny.extract import ExtractionError, HalEdgeExtractor
+from hal_multisynteny.extract import ExtractionError, FakeEdgeExtractor, HalEdgeExtractor
 from hal_multisynteny.hal import HalPreflightError, inspect_hal
 from hal_multisynteny.io import EDGE_MAPPING_FIELDS, read_leaf_occurrences
 from hal_multisynteny.models import LeafOccurrence, NodeBlock, NodeBlockOccurrence
@@ -635,3 +636,132 @@ def test_optional_real_hal_tools_are_available_for_fixture_generation():
         pytest.skip("HAL command-line tools are not installed")
     assert shutil.which("halStats")
     assert shutil.which("halLiftover")
+
+
+def test_fake_backend_emits_unmapped_and_rejects_unknown_blocks(tmp_path):
+    mapping = tmp_path / "mappings.tsv"
+    with mapping.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=EDGE_MAPPING_FIELDS, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerow(edge("child", "parent", "mapped", "chrP", 0, 10))
+    result = FakeEdgeExtractor(mapping).extract(
+        child_node_id="child",
+        parent_node_id="parent",
+        child_hal_genome="HAL_child",
+        parent_hal_genome="HAL_parent",
+        child_blocks=(
+            NodeBlock("mapped", "child", "chr1", 0, 10),
+            NodeBlock("missing", "child", "chr1", 10, 20),
+        ),
+    )
+    assert [run.child_block_id for run in result.runs] == ["mapped"]
+    assert len(result.unmapped) == 1
+    assert result.unmapped[0].child_block_id == "missing"
+    assert not hasattr(result.unmapped[0], "parent_start")
+
+    with mapping.open("a", encoding="utf-8") as handle:
+        handle.write("child\tunknown\tunknown\tchr1\t0\t10\tparent\tchrP\t0\t10\t+\t1\tunique\tbad\tfake\tfake\n")
+    with pytest.raises(ExtractionError, match="unknown block"):
+        FakeEdgeExtractor(mapping).extract(
+            child_node_id="child",
+            parent_node_id="parent",
+            child_hal_genome="HAL_child",
+            parent_hal_genome="HAL_parent",
+            child_blocks=(NodeBlock("mapped", "child", "chr1", 0, 10),),
+        )
+
+
+def test_fake_backend_rejects_duplicate_and_contradictory_rows(tmp_path):
+    duplicate = tmp_path / "duplicate.tsv"
+    row = edge("child", "parent", "mapped", "chrP", 0, 10)
+    with duplicate.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=EDGE_MAPPING_FIELDS, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerow(row)
+        writer.writerow(row)
+    with pytest.raises(ExtractionError, match="duplicate row"):
+        FakeEdgeExtractor(duplicate).extract(
+            "child",
+            "parent",
+            "HAL_child",
+            "HAL_parent",
+            (NodeBlock("mapped", "child", "chr1", 0, 10),),
+        )
+
+    contradictory = tmp_path / "contradictory.tsv"
+    row2 = dict(row)
+    row2["parent_start"] = 10
+    row2["parent_end"] = 20
+    with contradictory.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=EDGE_MAPPING_FIELDS, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerow(row)
+        writer.writerow(row2)
+    with pytest.raises(ExtractionError, match="contradictory"):
+        FakeEdgeExtractor(contradictory).extract(
+            "child",
+            "parent",
+            "HAL_child",
+            "HAL_parent",
+            (NodeBlock("mapped", "child", "chr1", 0, 10),),
+        )
+
+
+def test_audit_liftover_with_fake_executable_classifies_categories(tmp_path, monkeypatch):
+    hal = tmp_path / "toy.hal"
+    hal.write_text("fake HAL\n", encoding="utf-8")
+    blocks = tmp_path / "blocks.tsv"
+    blocks.write_text(
+        "block_id\tchrom\tstart\tend\n"
+        "unique\tchr1\t0\t10\n"
+        "multi\tchr1\t10\t20\n"
+        "unmapped\tchr1\t20\t30\n"
+        "split\tchr1\t30\t50\n"
+        "bad\tchr1\t50\t60\n",
+        encoding="utf-8",
+    )
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    liftover = tools / "halLiftover"
+    stats = tools / "halStats"
+    liftover.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "if '--version' in sys.argv:\n"
+        "    print('fake-halLiftover 1.0')\n"
+        "    raise SystemExit(0)\n"
+        "out = sys.argv[5]\n"
+        "with open(out, 'w') as handle:\n"
+        "    handle.write('chrP\\t0\\t10\\tunique\\t0\\t+\\n')\n"
+        "    handle.write('chrP\\t10\\t20\\tmulti\\t0\\t+\\n')\n"
+        "    handle.write('chrQ\\t10\\t20\\tmulti\\t0\\t-\\n')\n"
+        "    handle.write('chrP\\t30\\t40\\tsplit\\t0\\t+\\n')\n"
+        "    handle.write('chrP\\t45\\t50\\tsplit\\t0\\t+\\n')\n"
+        "    handle.write('chrP\\tbad\\t60\\tbad\\t0\\t+\\n')\n",
+        encoding="utf-8",
+    )
+    stats.write_text(
+        "#!/usr/bin/env python3\n"
+        "if '--version' in __import__('sys').argv:\n"
+        "    print('fake-halStats 1.0')\n"
+        "else:\n"
+        "    print('fake-halStats 1.0')\n",
+        encoding="utf-8",
+    )
+    os.chmod(liftover, 0o755)
+    os.chmod(stats, 0o755)
+    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ.get('PATH', '')}")
+    summary = audit_liftover(
+        hal_path=hal,
+        child_genome="HAL_child",
+        parent_genome="HAL_parent",
+        blocks_path=blocks,
+        output_prefix=tmp_path / "audit",
+    )
+    counts = {category: payload["count"] for category, payload in summary["categories"].items()}
+    assert counts["unique_full_length"] == 1
+    assert counts["multi_full_length"] == 1
+    assert counts["unmapped"] == 1
+    assert counts["split"] == 1
+    assert counts["invalid_output"] == 1
+    assert "split" in Path(summary["outputs"]["fragments"]).read_text(encoding="utf-8")

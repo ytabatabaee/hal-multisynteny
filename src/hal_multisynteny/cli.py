@@ -9,6 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import __version__
+from .audit import audit_liftover
 from .builder import BuildConfig, build_blocks
 from .hal import inspect_hal, write_hal_info
 from .io import (
@@ -245,6 +246,25 @@ def _run_tree(args: argparse.Namespace) -> int:
     return 0
 
 
+def _audit_liftover(args: argparse.Namespace) -> int:
+    summary = audit_liftover(
+        hal_path=args.hal,
+        child_genome=args.child_genome,
+        parent_genome=args.parent_genome,
+        blocks_path=args.blocks,
+        output_prefix=args.output_prefix,
+    )
+    print(
+        "audited "
+        f"{summary['blocks']} block(s): "
+        + ", ".join(
+            f"{category}={payload['count']}"
+            for category, payload in summary["categories"].items()
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="hal-multisynteny")
     parser.add_argument("--version", action="version", version=__version__)
@@ -322,6 +342,14 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--backend", choices=("fake", "hal"), default="fake")
     run.add_argument("--fake-mappings")
     run.set_defaults(func=_run_tree)
+
+    audit = subparsers.add_parser("audit-liftover", help="audit raw halLiftover BED output")
+    audit.add_argument("--hal", required=True)
+    audit.add_argument("--child-genome", required=True)
+    audit.add_argument("--parent-genome", required=True)
+    audit.add_argument("--blocks", required=True)
+    audit.add_argument("--output-prefix", required=True)
+    audit.set_defaults(func=_audit_liftover)
     return parser
 
 
