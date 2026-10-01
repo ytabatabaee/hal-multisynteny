@@ -1,0 +1,157 @@
+{
+  "derivation": "Manually derived from scripts/build_tiny_hal_fixture.sh MAF blocks. HAL_root, HAL_ancAB, and HAL_ancCD share chrRoot/chrAB/chrCD intervals 0-10 and 20-30 in forward orientation. HAL_A chrA:0-10 maps to HAL_ancAB chrAB:0-10 '+'. HAL_A chrA:10-20 is represented by the negative-strand MAF row HAL_A.chrA start=80,size=10,srcSize=100 and therefore maps to HAL_ancAB chrAB:20-30 '-'. HAL_A chrA:40-50 has no MAF row and is unmapped. HAL_A chrA:60-80 is split across HAL_ancAB chrAB:60-70 and chrAB:80-90. B, C, and D unique seed blocks map forward to their direct parents.",
+  "hal": {
+    "genomes": ["HAL_A", "HAL_B", "HAL_C", "HAL_D", "HAL_ancAB", "HAL_ancCD", "HAL_root"],
+    "parent_map": {
+      "HAL_A": "HAL_ancAB",
+      "HAL_B": "HAL_ancAB",
+      "HAL_C": "HAL_ancCD",
+      "HAL_D": "HAL_ancCD",
+      "HAL_ancAB": "HAL_root",
+      "HAL_ancCD": "HAL_root"
+    }
+  },
+  "extraction_cases": {
+    "unique_collinear_A_to_ancAB": {
+      "logical_child": "A",
+      "logical_parent": "ancAB",
+      "child_hal_genome": "HAL_A",
+      "parent_hal_genome": "HAL_ancAB",
+      "child_block_id": "A_unique",
+      "child_chrom": "chrA",
+      "child_start": 0,
+      "child_end": 10,
+      "mappings": [
+        {"parent_chrom": "chrAB", "parent_start": 0, "parent_end": 10, "strand": "+", "status": "unique", "copy_id": "1"}
+      ]
+    },
+    "inversion_A_to_ancAB": {
+      "logical_child": "A",
+      "logical_parent": "ancAB",
+      "child_hal_genome": "HAL_A",
+      "parent_hal_genome": "HAL_ancAB",
+      "child_block_id": "A_inversion",
+      "child_chrom": "chrA",
+      "child_start": 10,
+      "child_end": 20,
+      "mappings": [
+        {"parent_chrom": "chrAB", "parent_start": 20, "parent_end": 30, "strand": "-", "status": "unique", "copy_id": "1"}
+      ]
+    },
+    "unmapped_A_to_ancAB": {
+      "logical_child": "A",
+      "logical_parent": "ancAB",
+      "child_hal_genome": "HAL_A",
+      "parent_hal_genome": "HAL_ancAB",
+      "child_block_id": "A_unmapped",
+      "child_chrom": "chrA",
+      "child_start": 40,
+      "child_end": 50,
+      "unmapped": {"status": "unaligned", "reason_contains": "no parent interval"}
+    },
+    "split_or_gapped_A_to_ancAB": {
+      "logical_child": "A",
+      "logical_parent": "ancAB",
+      "child_hal_genome": "HAL_A",
+      "parent_hal_genome": "HAL_ancAB",
+      "child_block_id": "A_split",
+      "child_chrom": "chrA",
+      "child_start": 60,
+      "child_end": 80,
+      "expect_error_contains": ["A_split", "source_length=20", "chrAB:60-70", "length=10", "chrAB:80-90", "BED6 output does not establish exact source subinterval coordinates"]
+    }
+  },
+  "audits": {
+    "A_to_ancAB": {
+      "child_genome": "HAL_A",
+      "parent_genome": "HAL_ancAB",
+      "counts": {"unique_full_length": 2, "multi_full_length": 0, "unmapped": 1, "split": 1, "gapped_or_length_changed": 0, "invalid_output": 0},
+      "blocks": {
+        "A_unique": {"category": "unique_full_length", "source_length": 10, "fragment_count": 1, "full_length_fragment_count": 1, "fragments": [{"target_chrom": "chrAB", "target_start": 0, "target_end": 10, "target_length": 10, "strand": "+"}]},
+        "A_inversion": {"category": "unique_full_length", "source_length": 10, "fragment_count": 1, "full_length_fragment_count": 1, "fragments": [{"target_chrom": "chrAB", "target_start": 20, "target_end": 30, "target_length": 10, "strand": "-"}]},
+        "A_unmapped": {"category": "unmapped", "source_length": 10, "fragment_count": 0, "full_length_fragment_count": 0, "fragments": []},
+        "A_split": {"category": "split", "source_length": 20, "fragment_count": 2, "full_length_fragment_count": 0, "fragments": [{"target_chrom": "chrAB", "target_start": 60, "target_end": 70, "target_length": 10, "strand": "+"}, {"target_chrom": "chrAB", "target_start": 80, "target_end": 90, "target_length": 10, "strand": "+"}]}
+      }
+    },
+    "B_to_ancAB": {
+      "child_genome": "HAL_B",
+      "parent_genome": "HAL_ancAB",
+      "counts": {"unique_full_length": 2, "multi_full_length": 0, "unmapped": 0, "split": 0, "gapped_or_length_changed": 0, "invalid_output": 0},
+      "blocks": {
+        "B_unique": {"category": "unique_full_length", "source_length": 10, "fragment_count": 1, "full_length_fragment_count": 1, "fragments": [{"target_chrom": "chrAB", "target_start": 0, "target_end": 10, "target_length": 10, "strand": "+"}]},
+        "B_inversion": {"category": "unique_full_length", "source_length": 10, "fragment_count": 1, "full_length_fragment_count": 1, "fragments": [{"target_chrom": "chrAB", "target_start": 20, "target_end": 30, "target_length": 10, "strand": "+"}]}
+      }
+    },
+    "C_to_ancCD": {
+      "child_genome": "HAL_C",
+      "parent_genome": "HAL_ancCD",
+      "counts": {"unique_full_length": 1, "multi_full_length": 0, "unmapped": 0, "split": 0, "gapped_or_length_changed": 0, "invalid_output": 0},
+      "blocks": {"C_unique": {"category": "unique_full_length", "source_length": 10, "fragment_count": 1, "full_length_fragment_count": 1, "fragments": [{"target_chrom": "chrCD", "target_start": 0, "target_end": 10, "target_length": 10, "strand": "+"}]}}
+    },
+    "D_to_ancCD": {
+      "child_genome": "HAL_D",
+      "parent_genome": "HAL_ancCD",
+      "counts": {"unique_full_length": 1, "multi_full_length": 0, "unmapped": 0, "split": 0, "gapped_or_length_changed": 0, "invalid_output": 0},
+      "blocks": {"D_unique": {"category": "unique_full_length", "source_length": 10, "fragment_count": 1, "full_length_fragment_count": 1, "fragments": [{"target_chrom": "chrCD", "target_start": 0, "target_end": 10, "target_length": 10, "strand": "+"}]}}
+    },
+    "ancAB_to_root": {
+      "child_genome": "HAL_ancAB",
+      "parent_genome": "HAL_root",
+      "counts": {"unique_full_length": 2, "multi_full_length": 0, "unmapped": 0, "split": 0, "gapped_or_length_changed": 0, "invalid_output": 0},
+      "blocks": {
+        "ancAB_unique": {"category": "unique_full_length", "source_length": 10, "fragment_count": 1, "full_length_fragment_count": 1, "fragments": [{"target_chrom": "chrRoot", "target_start": 0, "target_end": 10, "target_length": 10, "strand": "+"}]},
+        "ancAB_inversion": {"category": "unique_full_length", "source_length": 10, "fragment_count": 1, "full_length_fragment_count": 1, "fragments": [{"target_chrom": "chrRoot", "target_start": 20, "target_end": 30, "target_length": 10, "strand": "+"}]}
+      }
+    },
+    "ancCD_to_root": {
+      "child_genome": "HAL_ancCD",
+      "parent_genome": "HAL_root",
+      "counts": {"unique_full_length": 1, "multi_full_length": 0, "unmapped": 0, "split": 0, "gapped_or_length_changed": 0, "invalid_output": 0},
+      "blocks": {"ancCD_unique": {"category": "unique_full_length", "source_length": 10, "fragment_count": 1, "full_length_fragment_count": 1, "fragments": [{"target_chrom": "chrRoot", "target_start": 0, "target_end": 10, "target_length": 10, "strand": "+"}]}}
+    }
+  },
+  "packages": {
+    "ancAB": {
+      "block_count": 2,
+      "node_occurrence_count": 4,
+      "leaf_occurrence_count": 4,
+      "conflict_count": 1,
+      "conflict_types": ["orientation_conflict"],
+      "unmapped": {"left": ["A_unmapped"], "right": []},
+      "blocks": [
+        {"block_id": "HMSP00000001", "chrom": "chrAB", "start": 0, "end": 10, "classification": "shared_consistent", "leaves": ["A", "B"], "leaf_orientations": {"A": "+", "B": "+"}},
+        {"block_id": "HMSP00000002", "chrom": "chrAB", "start": 20, "end": 30, "classification": "orientation_conflict", "leaves": ["A", "B"], "leaf_orientations": {"A": "-", "B": "+"}}
+      ]
+    },
+    "ancCD": {
+      "block_count": 1,
+      "node_occurrence_count": 2,
+      "leaf_occurrence_count": 2,
+      "conflict_count": 0,
+      "conflict_types": [],
+      "unmapped": {"left": [], "right": []},
+      "blocks": [
+        {"block_id": "HMSP00000001", "chrom": "chrCD", "start": 0, "end": 10, "classification": "shared_consistent", "leaves": ["C", "D"], "leaf_orientations": {"C": "+", "D": "+"}}
+      ]
+    },
+    "root": {
+      "block_count": 2,
+      "node_occurrence_count": 3,
+      "leaf_occurrence_count": 6,
+      "conflict_count": 0,
+      "conflict_types": [],
+      "unmapped": {"left": [], "right": []},
+      "blocks": [
+        {"block_id": "HMSP00000001", "chrom": "chrRoot", "start": 0, "end": 10, "classification": "shared_consistent", "leaves": ["A", "B", "C", "D"], "leaf_orientations": {"A": "+", "B": "+", "C": "+", "D": "+"}},
+        {"block_id": "HMSP00000002", "chrom": "chrRoot", "start": 20, "end": 30, "classification": "left_only", "leaves": ["A", "B"], "leaf_orientations": {"A": "-", "B": "+"}}
+      ]
+    }
+  },
+  "unmapped_lifecycle": {
+    "leaf": "A",
+    "block_id": "A_unmapped",
+    "leaf_coordinates": {"chrom": "chrA", "start": 40, "end": 50},
+    "edge_checkpoint": "ancAB/left_unmapped_edge_evidence.tsv",
+    "does_not_appear_in_spatial_nodes": ["ancAB", "root"]
+  }
+}

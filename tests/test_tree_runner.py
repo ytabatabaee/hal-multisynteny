@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from hal_multisynteny.audit import audit_liftover
+from hal_multisynteny.audit import AuditBlock, _classify_liftover_output, audit_liftover
 from hal_multisynteny.cli import main
 from hal_multisynteny.extract import ExtractionError, FakeEdgeExtractor, HalEdgeExtractor
 from hal_multisynteny.hal import HalPreflightError, inspect_hal
@@ -765,3 +765,58 @@ def test_audit_liftover_with_fake_executable_classifies_categories(tmp_path, mon
     assert counts["split"] == 1
     assert counts["invalid_output"] == 1
     assert "split" in Path(summary["outputs"]["fragments"]).read_text(encoding="utf-8")
+
+
+def classify_audit_rows(tmp_path, rows):
+    output = tmp_path / "audit.bed"
+    output.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
+    return _classify_liftover_output(
+        output,
+        (AuditBlock("B1", "chrChild", 0, 10),),
+    )
+
+
+@pytest.mark.parametrize(
+    ("rows", "category", "fragment_count", "full_count"),
+    [
+        (["chrP\t0\t10\tB1\t0\t+", "chrP\t0\t10\tB1\t0\t+"], "unique_full_length", 2, 2),
+        (["chrP\t0\t10\tB1\t0\t+", "chrQ\t20\t30\tB1\t0\t-"], "multi_full_length", 2, 2),
+        (["chrP\t0\t10\tB1\t0\t+", "chrP\t20\t25\tB1\t0\t+"], "split", 2, 1),
+        (["chrP\t0\t5\tB1\t0\t+", "chrP\t6\t9\tB1\t0\t+"], "split", 2, 0),
+        (["chrP\t0\t5\tB1\t0\t+"], "gapped_or_length_changed", 1, 0),
+        ([], "unmapped", 0, 0),
+    ],
+)
+def test_audit_classifier_categories(tmp_path, rows, category, fragment_count, full_count):
+    block_rows, fragments, invalid = classify_audit_rows(tmp_path, rows)
+    assert block_rows[0]["category"] == category
+    assert int(block_rows[0]["fragment_count"]) == fragment_count
+    assert int(block_rows[0]["full_length_fragment_count"]) == full_count
+    assert len(fragments) == fragment_count
+    assert not invalid
+
+
+@pytest.mark.parametrize(
+    ("row", "reason"),
+    [
+        ("chrP\t0\t10\tB1", "expected BED6"),
+        ("chrP\tx\t10\tB1\t0\t+", "non-integer coordinate"),
+        ("chrP\t10\t10\tB1\t0\t+", "end must be greater"),
+        ("chrP\t0\t10\tB1\t0\t?", "invalid strand"),
+    ],
+)
+def test_audit_classifier_known_malformed_rows_are_invalid_output(tmp_path, row, reason):
+    block_rows, fragments, invalid = classify_audit_rows(tmp_path, [row])
+    assert block_rows[0]["category"] == "invalid_output"
+    assert reason in block_rows[0]["reason"]
+    assert not fragments
+    assert len(invalid) == 1
+    assert invalid[0]["block_id"] == "B1"
+    assert reason in invalid[0]["reason"]
+
+
+def test_audit_classifier_rejects_unknown_and_unassignable_rows(tmp_path):
+    with pytest.raises(ExtractionError, match="unknown interval name"):
+        classify_audit_rows(tmp_path, ["chrP\t0\t10\tUNKNOWN\t0\t+"])
+    with pytest.raises(ExtractionError, match="no block name"):
+        classify_audit_rows(tmp_path, ["chrP\t0\t10"])

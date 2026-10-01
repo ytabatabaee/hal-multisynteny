@@ -53,3 +53,16 @@ error instead of silently reusing outputs.
 subtrees remain eligible for validated reuse. Leaf checkpoints are validated the
 same way as internal checkpoints; changed leaf seed files invalidate the leaf and
 therefore every affected ancestor.
+
+## Nonspatial unmapped evidence
+
+`left_unmapped_edge_evidence.tsv` and `right_unmapped_edge_evidence.tsv` contain
+child intervals that did not receive a parent location. These records are counted
+in `summary.json` and represented in the manifest as unresolved edge evidence.
+They do not have parent-coordinate columns, do not create atomic parent
+intervals, and do not become spatial occurrences at later ancestors under the
+current implementation.
+
+This behavior avoids fabricating coordinates. It also means unresolved unmapped
+regions are not yet carried upward in a lineage-level nonspatial table. Absence
+from a later spatial block table must not be interpreted as biological absence.

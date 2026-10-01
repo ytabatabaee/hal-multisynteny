@@ -15,6 +15,8 @@
 - Document current real-HAL limitations: split/gapped BED6 output is audited but
   not reconstructed, missing mapping is not absence, and the tiny fixture does
   not prove VGP-scale readiness or MAF2Synteny replacement.
+- Add fixture-driven expected results for the tiny-HAL integration tests, including exact audit categories, block contents, inversion propagation, and the nonspatial lifecycle of unmapped evidence.
+- Harden `audit-liftover` invalid-output handling so unknown block IDs fail and known malformed rows are preserved as explicit invalid diagnostics.
 
 ## 0.3.1 - 2026-09-30
 

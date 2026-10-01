@@ -57,3 +57,23 @@ transitivity does not guarantee interval or synteny-chain transitivity. Missing
 mapping is not biological absence. Duplication resolution depends on supplied
 copy-family information. VGP-scale performance has not been demonstrated, and
 this package does not estimate a species tree.
+
+## Current unmapped-evidence lifecycle
+
+Version 0.3.1 does not invent parent coordinates for unmapped child intervals.
+When an extractor cannot place a child block in the parent HAL genome, the node
+checkpoint records an `UnmappedEdgeEvidence` row for that edge. That record is
+nonspatial: it preserves the child node, child block ID, child chromosome,
+child coordinates, status, reason, command, and source anchor, but it has no
+parent chromosome or parent interval.
+
+Because it has no parent coordinates, unmapped evidence does not participate in
+the parent-coordinate atomic sweep, cannot create a spatial `NodeBlock`, and does
+not automatically propagate to later ancestors as a block occurrence. This loss
+of spatial propagation is an explicit current limitation, not a biological
+deletion or absence call.
+
+A future checkpoint schema could add a nonspatial lineage-evidence table that
+carries unresolved child evidence upward by node and provenance without placing
+it on parent coordinates. That design should remain separate from spatial block
+reconciliation unless a later extraction backend supplies valid coordinates.

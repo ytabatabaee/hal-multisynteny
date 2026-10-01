@@ -79,3 +79,9 @@ Successful tiny fixtures establish only that the extraction boundary, manifests,
 checkpoint reuse, and conservative rejection behavior work on small synthetic
 cases. They do not demonstrate biological correctness on real clades, VGP-scale
 performance, or equivalence to MAF2Synteny.
+
+The tiny-HAL expected results are checked in at
+`tests/fixtures/tiny_hal/expected_results.json`. They are manually derived from
+the fixture MAF blocks and are used by HAL-marked tests and the local smoke
+script to verify exact target intervals, strands, audit categories, propagated
+orientations, conflict classifications, and unmapped-evidence lifecycle.

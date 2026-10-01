@@ -6,9 +6,13 @@ repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 fixture_dir="${repo_dir}/tests/fixtures/tiny_hal"
 hal="${fixture_dir}/build/tiny.hal"
 
-if [[ ! -s "${hal}" ]]; then
-  "${repo_dir}/scripts/build_tiny_hal_fixture.sh"
-fi
+echo "HAL tool versions:"
+for tool in maf2hal halStats halLiftover; do
+  command -v "${tool}"
+  "${tool}" --version 2>&1 | head -n 1 || true
+done
+
+"${repo_dir}/scripts/build_tiny_hal_fixture.sh"
 
 rm -rf "${out_dir}"
 mkdir -p "${out_dir}/audit"
@@ -43,6 +47,10 @@ hal-multisynteny run-tree \
   --min-block-length 1 \
   --backend hal
 
+python "${repo_dir}/scripts/validate_tiny_hal_outputs.py" \
+  --fixture-dir "${fixture_dir}" \
+  --output-dir "${out_dir}"
+
 hal-multisynteny run-tree \
   --hal "${hal}" \
   --tree "${fixture_dir}/tree.nwk" \
@@ -52,6 +60,14 @@ hal-multisynteny run-tree \
   --min-block-length 1 \
   --backend hal \
   --resume
+
+python - "${out_dir}/run-a/run-summary.json" <<'PY'
+import json
+import sys
+summary = json.loads(open(sys.argv[1], encoding="utf-8").read())
+assert summary["reused_nodes"] == ["ancAB", "ancCD", "root"], summary
+print("resume reused:", ",".join(summary["reused_nodes"]))
+PY
 
 hal-multisynteny run-tree \
   --hal "${hal}" \
@@ -64,6 +80,15 @@ hal-multisynteny run-tree \
   --resume \
   --force-node ancAB
 
+python - "${out_dir}/run-a/run-summary.json" <<'PY'
+import json
+import sys
+summary = json.loads(open(sys.argv[1], encoding="utf-8").read())
+assert summary["recomputed_nodes"] == ["ancAB", "root"], summary
+assert summary["reused_nodes"] == ["ancCD"], summary
+print("force-node recomputed:", ",".join(summary["recomputed_nodes"]), "reused:", ",".join(summary["reused_nodes"]))
+PY
+
 hal-multisynteny run-tree \
   --hal "${hal}" \
   --tree "${fixture_dir}/tree.nwk" \
@@ -73,6 +98,26 @@ hal-multisynteny run-tree \
   --min-block-length 1 \
   --backend hal
 
-cmp "${out_dir}/run-a/nodes/root/blocks.tsv" "${out_dir}/run-b/nodes/root/blocks.tsv"
-cmp "${out_dir}/run-a/nodes/root/node_occurrences.tsv" "${out_dir}/run-b/nodes/root/node_occurrences.tsv"
-cmp "${out_dir}/run-a/nodes/root/leaf_occurrences.tsv" "${out_dir}/run-b/nodes/root/leaf_occurrences.tsv"
+meaningful=(
+  blocks.tsv
+  node_occurrences.tsv
+  leaf_occurrences.tsv
+  left_edge_runs.tsv
+  right_edge_runs.tsv
+  left_unmapped_edge_evidence.tsv
+  right_unmapped_edge_evidence.tsv
+  provenance.tsv
+  conflicts.tsv
+  summary.json
+)
+for node in ancAB ancCD root; do
+  for name in "${meaningful[@]}"; do
+    a="${out_dir}/run-a/nodes/${node}/${name}"
+    b="${out_dir}/run-b/nodes/${node}/${name}"
+    if [[ -e "${a}" || -e "${b}" ]]; then
+      cmp "${a}" "${b}"
+    fi
+  done
+done
+
+echo "tiny HAL integration passed: audits, semantic checkpoints, resume, force-node, and byte-stable scientific outputs"

@@ -103,6 +103,7 @@
   "expected_limitations": [
     "No genuine duplicated real-HAL assertion is claimed for this hand-written MAF fixture until HAL duplicate-edge behavior is verified with a richer fixture."
   ],
+  "expected_results": "expected_results.json",
   "hal": "build/tiny.hal",
   "leaf_blocks": "leaf-blocks",
   "node_map": "node-map.tsv",

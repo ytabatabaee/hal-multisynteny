@@ -40,6 +40,13 @@ RAW_FRAGMENT_FIELDS = [
     "raw_bed",
 ]
 
+INVALID_RECORD_FIELDS = [
+    "line_number",
+    "block_id",
+    "reason",
+    "raw_bed",
+]
+
 CATEGORIES = (
     "unique_full_length",
     "multi_full_length",
@@ -81,6 +88,7 @@ def audit_liftover(
     prefix.parent.mkdir(parents=True, exist_ok=True)
     per_block_path = Path(f"{prefix}.blocks.tsv")
     fragments_path = Path(f"{prefix}.fragments.tsv")
+    invalid_path = Path(f"{prefix}.invalid.tsv")
     summary_path = Path(f"{prefix}.summary.json")
 
     with tempfile.TemporaryDirectory(prefix="hms-audit-") as temp_name:
@@ -106,10 +114,11 @@ def audit_liftover(
                 "halLiftover failed with exit "
                 f"{completed.returncode}: {completed.stderr.strip() or completed.stdout.strip()}"
             )
-        rows, fragments = _classify_liftover_output(output_bed, blocks)
+        rows, fragments, invalid_records = _classify_liftover_output(output_bed, blocks)
 
     _write_tsv(per_block_path, AUDIT_FIELDS, rows)
     _write_tsv(fragments_path, RAW_FRAGMENT_FIELDS, fragments)
+    _write_tsv(invalid_path, INVALID_RECORD_FIELDS, invalid_records)
     counts = Counter(row["category"] for row in rows)
     total = len(rows)
     summary = {
@@ -134,7 +143,9 @@ def audit_liftover(
         "outputs": {
             "per_block": str(per_block_path),
             "fragments": str(fragments_path),
+            "invalid_records": str(invalid_path),
         },
+        "invalid_records": invalid_records,
     }
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return summary
@@ -164,28 +175,77 @@ def _read_blocks(path: str | Path) -> tuple[AuditBlock, ...]:
 
 def _classify_liftover_output(
     output_bed: Path, blocks: tuple[AuditBlock, ...]
-) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
     by_id = {block.block_id: block for block in blocks}
     grouped: dict[str, list[tuple[int, str, int, int, str, str]]] = {}
     invalid: dict[str, list[str]] = {}
+    invalid_records: list[dict[str, str]] = []
     with output_bed.open(encoding="utf-8") as handle:
         for line_number, raw in enumerate(handle, start=1):
             if not raw.strip():
                 continue
             parts = raw.rstrip("\n").split("\t")
             if len(parts) < 6:
-                name = parts[3] if len(parts) > 3 else f"<line-{line_number}>"
+                if len(parts) <= 3:
+                    raise ExtractionError(
+                        f"unsupported halLiftover BED output at line {line_number}: "
+                        "expected BED6 and no block name was available"
+                    )
+                name = parts[3]
+                if name not in by_id:
+                    raise ExtractionError(
+                        f"halLiftover returned unknown interval name {name!r} at line {line_number}"
+                    )
                 invalid.setdefault(name, []).append(f"line {line_number}: expected BED6")
+                invalid_records.append(
+                    {
+                        "line_number": str(line_number),
+                        "block_id": name,
+                        "reason": "expected BED6",
+                        "raw_bed": raw.rstrip("\n"),
+                    }
+                )
                 continue
             chrom, start_text, end_text, name, _score, strand = parts[:6]
             if name not in by_id:
-                invalid.setdefault(name, []).append(f"line {line_number}: unknown block")
-                continue
+                raise ExtractionError(
+                    f"halLiftover returned unknown interval name {name!r} at line {line_number}"
+                )
             try:
                 start = int(start_text)
                 end = int(end_text)
             except ValueError:
                 invalid.setdefault(name, []).append(f"line {line_number}: non-integer coordinate")
+                invalid_records.append(
+                    {
+                        "line_number": str(line_number),
+                        "block_id": name,
+                        "reason": "non-integer coordinate",
+                        "raw_bed": raw.rstrip("\n"),
+                    }
+                )
+                continue
+            if end <= start:
+                invalid.setdefault(name, []).append(f"line {line_number}: end must be greater than start")
+                invalid_records.append(
+                    {
+                        "line_number": str(line_number),
+                        "block_id": name,
+                        "reason": "end must be greater than start",
+                        "raw_bed": raw.rstrip("\n"),
+                    }
+                )
+                continue
+            if strand not in {"+", "-"}:
+                invalid.setdefault(name, []).append(f"line {line_number}: invalid strand {strand!r}")
+                invalid_records.append(
+                    {
+                        "line_number": str(line_number),
+                        "block_id": name,
+                        "reason": f"invalid strand {strand!r}",
+                        "raw_bed": raw.rstrip("\n"),
+                    }
+                )
                 continue
             grouped.setdefault(name, []).append((line_number, chrom, start, end, strand, raw.rstrip("\n")))
 
@@ -244,24 +304,7 @@ def _classify_liftover_output(
                 "reason": reason,
             }
         )
-    for name, reasons in sorted(invalid.items()):
-        if name in by_id:
-            continue
-        rows.append(
-            {
-                "block_id": name,
-                "chrom": "",
-                "start": "",
-                "end": "",
-                "source_length": "",
-                "category": "invalid_output",
-                "fragment_count": "0",
-                "full_length_fragment_count": "0",
-                "target_fragments": "",
-                "reason": "; ".join(reasons),
-            }
-        )
-    return rows, fragments
+    return rows, fragments, invalid_records
 
 
 def _write_tsv(path: Path, fields: list[str], rows: list[dict[str, str]]) -> None:
