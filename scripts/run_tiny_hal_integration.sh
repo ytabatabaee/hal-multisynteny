@@ -152,13 +152,7 @@ for node in ancAB ancCD root; do
     a="${out_dir}/run-a/nodes/${node}/${name}"
     b="${out_dir}/run-b/nodes/${node}/${name}"
     if [[ -e "${a}" || -e "${b}" ]]; then
-      if [[ "${name}" == *.tsv ]]; then
-        sed -E 's#/[^"[:space:]]*/hms-hal-[^"/[:space:]]*/#<hms-hal-temp>/#g' "${a}" > "${a}.normalized"
-        sed -E 's#/[^"[:space:]]*/hms-hal-[^"/[:space:]]*/#<hms-hal-temp>/#g' "${b}" > "${b}.normalized"
-        cmp "${a}.normalized" "${b}.normalized"
-      else
-        cmp "${a}" "${b}"
-      fi
+      cmp "${a}" "${b}"
     fi
   done
 done

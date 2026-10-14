@@ -417,6 +417,14 @@ class HalEdgeExtractor:
                 parent_hal_genome,
                 str(output_bed),
             )
+            provenance_command = (
+                self.hal_liftover,
+                str(self.hal_path),
+                child_hal_genome,
+                "<child.bed>",
+                parent_hal_genome,
+                "<parent.bed>",
+            )
             completed = subprocess.run(command, check=False, capture_output=True, text=True)
             if completed.returncode != 0:
                 raise ExtractionError(
@@ -424,14 +432,14 @@ class HalEdgeExtractor:
                     f"{completed.returncode}: {completed.stderr.strip() or completed.stdout.strip()}"
                 )
             runs, unmapped = self._parse_bed_output(
-                output_bed, blocks, child_node_id, parent_node_id, command
+                output_bed, blocks, child_node_id, parent_node_id, provenance_command
             )
         return EdgeExtractionResult(
             tuple(sorted(runs, key=lambda run: (run.parent_chrom, run.parent_start, run.child_block_id))),
             tuple(sorted(unmapped, key=lambda row: (row.child_node, row.child_block_id))),
             "halLiftover-bed6",
             self.tool_versions(),
-            (command,),
+            (provenance_command,),
             (
                 (
                     "halLiftover BED output is accepted only when each emitted row is a "
