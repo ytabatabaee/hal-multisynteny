@@ -132,7 +132,7 @@ do not establish VGP-scale performance.
 
 ## Bottom-up HAL pilot runner
 
-Version 0.3.1 includes a checkpointed tree runner:
+The checkpointed tree runner includes automatic halSynteny leaf initialization:
 
 ```bash
 hal-multisynteny run-tree \
@@ -168,6 +168,11 @@ edges and `2n-1` nodes. The run records `node_statistics.tsv`,
 checkpoint records `merge_decisions.tsv` and `close_unmerged_pairs.tsv`.
 Leaf checkpoints contain `raw_halsynteny.psl`, `parent_edge_runs.tsv`, and
 `provenance.json`. halSynteny transitivity remains unproven.
+
+Exact query-side chains share one logical block family. Distinct target mappings
+are retained as duplicated local alternatives. Partially overlapping query
+chains remain separate conservative families and are marked duplicated; copy
+labels are never inferred across child systems.
 
 The runner parses a rooted binary guide tree, initializes supplied leaf seed
 blocks, maps each child node's own `NodeBlock` coordinates to its direct HAL

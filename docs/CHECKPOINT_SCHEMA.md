@@ -13,13 +13,17 @@ left_edge_runs.tsv
 right_edge_runs.tsv
 left_unmapped_edge_evidence.tsv
 right_unmapped_edge_evidence.tsv
+merge_decisions.tsv
+close_unmerged_pairs.tsv
 summary.json
 manifest.json
 COMPLETE
 ```
 
 Leaf packages contain `blocks.tsv`, `node_occurrences.tsv`,
-`leaf_occurrences.tsv`, `summary.json`, `manifest.json`, and `COMPLETE`.
+`leaf_occurrences.tsv`, `parent_edge_runs.tsv`, `raw_halsynteny.psl`,
+`provenance.json`, `summary.json`, `manifest.json`, and `COMPLETE` when
+`--leaf-init halsynteny` is selected.
 
 `blocks.tsv` stores `NodeBlock` rows in the current node's HAL coordinates.
 `node_occurrences.tsv` stores represented intervals in the current node.
@@ -45,9 +49,11 @@ Resume reuses a checkpoint only when `COMPLETE` exists, the schema version
 matches, parameters match, the run identity matches, current child manifest
 checksums match, and every output checksum validates. The run identity includes
 the normalized guide tree, node-map TSV, leaf seed TSV, backend selection, fake
-mapping TSV or HAL identity, HAL tool identity when applicable, and
-reconciliation settings. Changed inputs fail with an explicit stale-checkpoint
-error instead of silently reusing outputs.
+mapping TSV or HAL identity, HAL tool identity when applicable, raw PSL and
+normalized mapping checksums, and reconciliation settings. Automatic leaf
+initialization records the exact executable, version, command, parameters,
+logical edge names, and HAL genome names. Changed inputs fail with an explicit
+stale-checkpoint error instead of silently reusing outputs.
 
 `--force-node X` recomputes `X` and every ancestor of `X`. Unrelated sibling
 subtrees remain eligible for validated reuse. Leaf checkpoints are validated the

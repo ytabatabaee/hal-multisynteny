@@ -20,6 +20,7 @@ from hal_multisynteny.runner import (
     RunTreeConfig,
     _propagate_leaf_occurrences,
     _write_checkpoint_files,
+    load_package,
     run_tree,
 )
 from hal_multisynteny.tree import TreeError, build_traversal_plan
@@ -156,7 +157,7 @@ def test_four_leaf_fake_tree_end_to_end_resume_force_and_dry_run(tmp_path):
     assert {row.leaf for row in leaf_occurrences} == {"A", "B", "C", "D"}
     assert all(row.node == "root" and row.node_start == 0 and row.node_end == 100 for row in leaf_occurrences)
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["schema_version"] == "0.3.1"
+    assert manifest["schema_version"] == "0.4.0"
     first_bytes = {path.name: path.read_bytes() for path in sorted(root.iterdir()) if path.is_file()}
 
     run_tree(
@@ -510,7 +511,9 @@ def write_fake_hal_tools(bin_dir: Path, *, tree_text: str, genomes: str) -> None
         "#!/usr/bin/env python3\n"
         "import sys\n"
         "if '--version' in sys.argv:\n"
-        "    print('fake-halLiftover 1.0')\n",
+        "    print('fake-halLiftover 1.0')\n"
+        "else:\n"
+        "    open(sys.argv[-1], 'w', encoding='utf-8').close()\n",
         encoding="utf-8",
     )
     os.chmod(stats, 0o755)
@@ -553,6 +556,62 @@ def test_hal_preflight_uses_node_map_and_rejects_bad_edges_before_mutation(tmp_p
             config=RunTreeConfig(backend="hal", hal=str(hal)),
         )
     assert not output.exists()
+
+
+def test_halsynteny_leaf_init_without_leaf_blocks_runs_api_and_cli(tmp_path, monkeypatch):
+    tree, node_map, _leaf_dir, _mappings = write_pilot_inputs(tmp_path)
+    hal = tmp_path / "toy.hal"
+    hal.write_text("fake HAL\n", encoding="utf-8")
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    write_fake_hal_tools(
+        tools,
+        tree_text="((HAL_A,HAL_B)HAL_N1,(HAL_C,HAL_D)HAL_N2)HAL_ROOT;",
+        genomes="HAL_A HAL_B HAL_C HAL_D HAL_N1 HAL_N2 HAL_ROOT",
+    )
+    synteny = tools / "halSynteny"
+    synteny.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "if '--help' in sys.argv:\n"
+        "    print('--minBlockSize --maxAnchorDistance')\n"
+        "    raise SystemExit(0)\n"
+        "print('100\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t+\\tchr1\\t1000\\t0\\t100\\tchr1\\t1000\\t0\\t100\\t1\\t100,\\t0,\\t0,')\n",
+        encoding="utf-8",
+    )
+    os.chmod(synteny, 0o755)
+    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ.get('PATH', '')}")
+    api_output = tmp_path / "automatic-api"
+    run_tree(
+        tree_path=tree, node_map_path=node_map, leaf_blocks=None, output_dir=api_output,
+        config=RunTreeConfig(backend="hal", hal=str(hal), leaf_init="halsynteny", min_block_length=1),
+    )
+    assert (api_output / "nodes" / "n1" / "COMPLETE").exists()
+    assert (api_output / "node_statistics.tsv").exists()
+    assert (api_output / "nodes" / "A" / "raw_halsynteny.psl").exists()
+    n1_summary = json.loads((api_output / "nodes" / "n1" / "summary.json").read_text(encoding="utf-8"))
+    assert n1_summary["node_statistics"]["left_input_block_count"] == 1
+    assert n1_summary["node_statistics"]["left_mapping_occurrence_count"] == 1
+    load_package(api_output / "nodes" / "n1", "n1", "HAL_N1")
+    first_statistics = (api_output / "node_statistics.tsv").read_bytes()
+    run_tree(
+        tree_path=tree, node_map_path=node_map, leaf_blocks=None, output_dir=api_output,
+        config=RunTreeConfig(backend="hal", hal=str(hal), leaf_init="halsynteny", min_block_length=1, resume=True),
+    )
+    assert (api_output / "node_statistics.tsv").read_bytes() == first_statistics
+    synteny.write_text(synteny.read_text(encoding="utf-8").replace("chr1", "chr2"), encoding="utf-8")
+    with pytest.raises(CheckpointError, match="stale checkpoint"):
+        run_tree(
+            tree_path=tree, node_map_path=node_map, leaf_blocks=None, output_dir=api_output,
+            config=RunTreeConfig(backend="hal", hal=str(hal), leaf_init="halsynteny", min_block_length=1, resume=True),
+        )
+    cli_output = tmp_path / "automatic-cli"
+    assert main([
+        "run-tree", "--leaf-init", "halsynteny", "--backend", "hal", "--hal", str(hal),
+        "--tree", str(tree), "--node-map", str(node_map), "--output-dir", str(cli_output),
+        "--min-block-length", "1",
+    ]) == 0
+    assert (cli_output / "node_classifications.tsv").exists()
 
 
 def test_hal_preflight_rejects_missing_hal_genome(tmp_path, monkeypatch):
@@ -729,7 +788,6 @@ def test_audit_liftover_with_fake_executable_classifies_categories(tmp_path, mon
         "import sys\n"
         "if '--version' in sys.argv:\n"
         "    print('fake-halLiftover 1.0')\n"
-        "    raise SystemExit(0)\n"
         "out = sys.argv[5]\n"
         "with open(out, 'w') as handle:\n"
         "    handle.write('chrP\\t0\\t10\\tunique\\t0\\t+\\n')\n"

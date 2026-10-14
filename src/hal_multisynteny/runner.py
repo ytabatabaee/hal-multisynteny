@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -53,6 +55,9 @@ class CheckpointError(RuntimeError):
     """Raised for stale, incomplete, or invalid checkpoint packages."""
 
 
+CHECKPOINT_SCHEMA_VERSION = "0.4.0"
+
+
 @dataclass(frozen=True, slots=True)
 class NodePackage:
     node_id: str
@@ -89,7 +94,7 @@ def init_leaf_packages(
     plan = build_traversal_plan(tree_path, node_map_path)
     identity = {
         "version": __version__,
-        "schema_version": "0.3.1",
+        "schema_version": CHECKPOINT_SCHEMA_VERSION,
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
         "leaf_seed_sha256": sha256_file(Path(leaf_blocks) / "leaf_blocks.tsv"),
@@ -222,10 +227,7 @@ def run_tree(
             result,
             identity,
         )
-        if result.statistics is not None:
-            result.statistics["left_unmapped_child_block_count"] = len(left_result.unmapped)
-            result.statistics["right_unmapped_child_block_count"] = len(right_result.unmapped)
-            result.statistics["leaf_occurrences_represented"] = len(leaf_occurrences)
+        _update_node_statistics(result, left_package, right_package, left_result, right_result, leaf_occurrences)
         _write_internal_checkpoint(
             node_path,
             node_blocks,
@@ -245,7 +247,7 @@ def run_tree(
         output / "run-summary.json",
         {
             "version": __version__,
-            "schema_version": "0.3.1",
+    "schema_version": CHECKPOINT_SCHEMA_VERSION,
             "identity": identity,
             "reused_nodes": reused,
             "recomputed_nodes": recomputed,
@@ -343,7 +345,7 @@ def _init_leaf_packages_from_plan(
             )
         manifest = {
             "version": __version__,
-            "schema_version": "0.3.1",
+            "schema_version": CHECKPOINT_SCHEMA_VERSION,
             "node_id": leaf,
             "hal_genome": plan.node_to_hal[leaf],
             "kind": "leaf",
@@ -365,34 +367,102 @@ def _extract_child_edge(extractor, package, child_node, parent_node, child_genom
                              parent_hal_genome=parent_genome, child_blocks=blocks)
 
 
+def _update_node_statistics(result, left_package, right_package, left_result, right_result, leaf_occurrences):
+    if result.statistics is None:
+        object.__setattr__(result, "statistics", {})
+    sides = (("left", left_package, left_result), ("right", right_package, right_result))
+    for side, package, extraction in sides:
+        input_blocks = {block.block_id for block in package.blocks}
+        mapped_blocks = {run.child_block_id for run in extraction.runs}
+        unmapped_blocks = input_blocks - mapped_blocks
+        if mapped_blocks | unmapped_blocks != input_blocks:
+            raise CheckpointError(f"{side} mapped/unmapped child blocks do not cover input blocks")
+        occurrences = {(run.child_block_id, run.child_occurrence_id, run.copy_id) for run in extraction.runs}
+        status_by_occurrence = {}
+        for run in extraction.runs:
+            status_by_occurrence[(run.child_block_id, run.child_occurrence_id, run.copy_id)] = run.status
+        result.statistics[f"{side}_input_block_count"] = len(input_blocks)
+        result.statistics[f"{side}_mapped_child_block_count"] = len(mapped_blocks)
+        result.statistics[f"{side}_unmapped_child_block_count"] = len(unmapped_blocks)
+        result.statistics[f"{side}_mapping_occurrence_count"] = len(occurrences)
+        result.statistics[f"{side}_mapping_run_count"] = len(extraction.runs)
+        result.statistics[f"{side}_mapping_status_counts"] = {
+            status: sum(value == status for value in status_by_occurrence.values())
+            for status in ("unique", "duplicated", "ambiguous", "unaligned")
+        }
+    result.statistics["leaf_occurrences_represented"] = len(leaf_occurrences)
+    result.statistics["mapping_status_denominator"] = (
+        result.statistics["left_mapping_occurrence_count"] + result.statistics["right_mapping_occurrence_count"]
+    )
+    result.statistics["mapping_status_counts"] = {
+        status: sum(result.statistics[f"{side}_mapping_status_counts"][status] for side in ("left", "right"))
+        for status in ("unique", "duplicated", "ambiguous", "unaligned")
+    }
+    # Keep the historical top-level names, but make them obey the same
+    # logical-occurrence denominator as the side-specific diagnostics.
+    for status in ("unique", "duplicated", "ambiguous", "unaligned"):
+        result.statistics[f"{status}_mappings"] = result.statistics["mapping_status_counts"][status]
+
+
+def _normalized_runs_checksum(runs: Iterable[EdgeMappingRun]) -> str:
+    payload = [asdict(run) for run in sorted(runs, key=lambda row: (
+        row.child_node, row.child_block_id, row.child_occurrence_id, row.source_anchor_id,
+    ))]
+    return hashlib.sha256((json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()).hexdigest()
+
+
 def _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializer, resume):
     leaves = sorted({node_id for node_id in plan.node_to_hal if node_id not in {step.node_id for step in plan.steps}})
     parent_by_child = {child: step for step in plan.steps for child in (step.left_child, step.right_child)}
     for leaf in leaves:
         step = parent_by_child[leaf]
         path = Path(output_dir) / "nodes" / leaf
-        parameters = _leaf_parameters(plan, identity, leaf) | {"leaf_init": config.leaf_init,
-            "min_block_size": config.hal_synteny_min_block_size, "max_anchor_distance": config.hal_synteny_max_anchor_distance}
+        base_parameters = _leaf_parameters(plan, identity, leaf) | {"leaf_init": config.leaf_init,
+            "min_block_size": config.hal_synteny_min_block_size, "max_anchor_distance": config.hal_synteny_max_anchor_distance,
+            "halsynteny_executable": initializer.executable, "halsynteny_version": initializer.executable_version}
+        result = initializer.initialize(leaf, step.node_id, plan.node_to_hal[leaf], step.hal_genome)
+        parameters = base_parameters | {"raw_psl_sha256": hashlib.sha256(result.raw_psl.encode()).hexdigest(),
+                                        "normalized_mapping_sha256": _normalized_runs_checksum(result.runs)}
         if path.joinpath("COMPLETE").exists() and resume and _can_reuse(path, parameters, {}, identity):
             continue
-        result = initializer.initialize(leaf, step.node_id, plan.node_to_hal[leaf], step.hal_genome)
         blocks = tuple(result.blocks)
-        node_occ = tuple(NodeBlockOccurrence(b.block_id, leaf, b.chrom, b.start, b.end,
-                           f"{b.block_id}.node", "1", b.mapping_status, b.block_id) for b in blocks)
-        leaf_occ = tuple(LeafOccurrence(b.block_id, f"{b.block_id}.leaf", leaf, b.chrom, b.start, b.end, "+", "1",
-                           b.mapping_status, "halSynteny", leaf, b.chrom, b.start, b.end) for b in blocks)
-        manifest = {"version": __version__, "schema_version": "0.3.1", "node_id": leaf,
+        runs_by_occurrence: dict[tuple[str, str, str], list[EdgeMappingRun]] = defaultdict(list)
+        for run in result.runs:
+            runs_by_occurrence[(run.child_block_id, run.child_occurrence_id, run.copy_id)].append(run)
+        node_occ_rows = []
+        leaf_occ_rows = []
+        for block in blocks:
+            alternatives = sorted((key, rows) for key, rows in runs_by_occurrence.items() if key[0] == block.block_id)
+            for (_, occurrence_id, copy_id), rows in alternatives:
+                status = rows[0].status
+                qstart = min(row.child_start for row in rows)
+                qend = max(row.child_end for row in rows)
+                node_occ_rows.append(NodeBlockOccurrence(block.block_id, leaf, block.chrom, qstart, qend,
+                    occurrence_id, copy_id, status, block.block_id))
+                leaf_occ_rows.append(LeafOccurrence(block.block_id, occurrence_id, leaf, block.chrom, qstart, qend,
+                    "+", copy_id, status, "halSynteny", leaf, block.chrom, qstart, qend))
+        node_occ = tuple(node_occ_rows)
+        leaf_occ = tuple(leaf_occ_rows)
+        manifest = {"version": __version__, "schema_version": CHECKPOINT_SCHEMA_VERSION, "node_id": leaf,
                     "hal_genome": plan.node_to_hal[leaf], "parent_node": step.node_id, "kind": "leaf",
                     "tree_sha256": plan.tree_sha256, "node_map_sha256": plan.node_map_sha256,
                     "parameters": parameters, "run_identity": identity, "tool_version": result.tool_versions.get("halSynteny", "unknown"),
                     "hal_sha256": initializer.hal_checksum, "command": list(result.command),
+                    "raw_psl_sha256": hashlib.sha256(result.raw_psl.encode()).hexdigest(),
+                    "normalized_mapping_sha256": _normalized_runs_checksum(result.runs),
+                    "query_genome": plan.node_to_hal[leaf], "target_genome": step.hal_genome,
+                    "logical_child": leaf, "logical_parent": step.node_id,
+                    "halsynteny_executable": result.executable, "halsynteny_version": result.version,
                     "stdout": result.stdout, "stderr": result.stderr,
                     "warnings": ["halSynteny transitivity has not been established"]}
         leaf_summary = {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occ), "initializer": "halsynteny"}
         leaf_provenance = {"command": result.command, "stdout": result.stdout, "stderr": result.stderr,
             "hal_sha256": initializer.hal_checksum, "tree_sha256": plan.tree_sha256,
             "node_map_sha256": plan.node_map_sha256, "query_genome": plan.node_to_hal[leaf],
-            "target_genome": step.hal_genome}
+            "target_genome": step.hal_genome, "logical_child": leaf, "logical_parent": step.node_id,
+            "halsynteny_executable": result.executable, "halsynteny_version": result.version,
+            "raw_psl_sha256": hashlib.sha256(result.raw_psl.encode()).hexdigest(),
+            "normalized_mapping_sha256": _normalized_runs_checksum(result.runs)}
         _write_checkpoint_files(path, {
             "blocks.tsv": lambda p, value=blocks: write_node_blocks(p, value),
             "node_occurrences.tsv": lambda p, value=node_occ: write_node_occurrences(p, value),
@@ -525,7 +595,8 @@ def _write_internal_checkpoint(
         "conflicts.tsv": lambda p: write_conflicts(p, result.conflicts),
         "merge_decisions.tsv": lambda p: write_merge_decisions(p, result.merge_decisions),
         "close_unmerged_pairs.tsv": lambda p: write_merge_decisions(
-            p, tuple(d for d in result.merge_decisions if not d.can_merge and d.parent_gap <= close_unmerged_threshold)
+            p, tuple(d for d in result.merge_decisions if not d.can_merge and d.parent_gap <= close_unmerged_threshold
+                     and "different_parent_chromosome" not in d.rejection_reasons)
         ),
         "left_edge_runs.tsv": lambda p: write_edge_mapping_runs(p, left_runs),
         "right_edge_runs.tsv": lambda p: write_edge_mapping_runs(p, right_runs),
@@ -581,7 +652,7 @@ def _manifest(
 ) -> dict[str, object]:
     return {
         "version": __version__,
-        "schema_version": "0.3.1",
+        "schema_version": CHECKPOINT_SCHEMA_VERSION,
         "node_id": step.node_id,
         "hal_genome": step.hal_genome,
         "children": [step.left_child, step.right_child],
@@ -606,16 +677,16 @@ def _manifest(
 def _run_identity(
     config: RunTreeConfig,
     plan: TraversalPlan,
-    leaf_blocks: str | Path,
+    leaf_blocks: str | Path | None,
     hal_info: dict[str, object] | None,
 ) -> dict[str, object]:
-    leaf_seed = Path(leaf_blocks) / "leaf_blocks.tsv"
+    leaf_seed = Path(leaf_blocks) / "leaf_blocks.tsv" if leaf_blocks is not None else None
     identity: dict[str, object] = {
         "version": __version__,
-        "schema_version": "0.3.1",
+        "schema_version": CHECKPOINT_SCHEMA_VERSION,
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
-        "leaf_seed_sha256": sha256_file(leaf_seed) if leaf_blocks and leaf_seed.exists() else "",
+        "leaf_seed_sha256": sha256_file(leaf_seed) if leaf_seed is not None and leaf_seed.exists() else "",
         "backend": config.backend,
         "fake_mapping_sha256": sha256_file(config.fake_mappings) if config.fake_mappings else "",
     }
@@ -629,7 +700,7 @@ def _run_identity(
 def _leaf_parameters(plan: TraversalPlan, identity: dict[str, object], leaf: str) -> dict[str, object]:
     return {
         "version": __version__,
-        "schema_version": "0.3.1",
+        "schema_version": CHECKPOINT_SCHEMA_VERSION,
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
         "leaf": leaf,
@@ -661,7 +732,7 @@ def _parameters(config: RunTreeConfig, plan: TraversalPlan, identity: dict[str, 
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
         "version": __version__,
-        "schema_version": "0.3.1",
+        "schema_version": CHECKPOINT_SCHEMA_VERSION,
         "identity": identity or {},
     }
 
@@ -675,7 +746,7 @@ def _can_reuse(
     if not (path / "COMPLETE").exists():
         return False
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
-    if manifest.get("schema_version") not in {"0.3.1"}:
+    if manifest.get("schema_version") not in {CHECKPOINT_SCHEMA_VERSION}:
         raise CheckpointError(f"stale checkpoint schema for {path}")
     if manifest.get("parameters") != parameters:
         raise CheckpointError(f"stale checkpoint parameters for {path}")

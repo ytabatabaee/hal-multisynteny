@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import Protocol
 
@@ -24,14 +25,14 @@ class ExtractionError(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class HalSyntenyLeafResult:
     blocks: tuple[NodeBlock, ...]
-    node_occurrences: tuple[tuple[str, str, str, int, int, str, str, str], ...]
-    leaf_occurrences: tuple[tuple[str, str, str, int, int, str, str, str], ...]
     runs: tuple[EdgeMappingRun, ...]
     raw_psl: str
     command: tuple[str, ...]
     stdout: str
     stderr: str
     tool_versions: dict[str, str]
+    executable: str
+    version: str
 
 
 def build_halsynteny_command(
@@ -54,18 +55,26 @@ def build_halsynteny_command(
 def parse_halsynteny_psl(
     text: str, *, child_node: str, parent_node: str, query_genome: str,
     target_genome: str, command: tuple[str, ...],
-) -> tuple[NodeBlock, ...] | tuple[tuple[NodeBlock, ...], tuple[EdgeMappingRun, ...]]:
-    """Strictly parse PSL and return deterministic query chains and fragment runs."""
-    rows: list[tuple[tuple[str, ...], list[EdgeMappingRun]]] = []
+) -> tuple[tuple[NodeBlock, ...], tuple[EdgeMappingRun, ...]]:
+    """Parse standard PSL into logical query families and fragment runs.
+
+    Exact query-side chains form one family. Distinct target mappings become
+    alternatives of that family; partially overlapping query chains remain
+    separate families and are marked duplicated when they overlap.
+    """
+    rows: list[dict[str, object]] = []
     for line_number, raw in enumerate(text.splitlines(), start=1):
-        if not raw.strip() or raw.startswith(("psLayout", "match")):
+        stripped = raw.strip()
+        if not stripped or stripped.startswith(("psLayout", "match", "---")):
             continue
         fields = raw.rstrip("\n").split("\t")
         if len(fields) != 21:
             raise ExtractionError(f"halSynteny PSL line {line_number}: expected 21 columns")
         try:
-            ints = [int(fields[i]) for i in range(8)] + [int(fields[i]) for i in (10, 11, 12, 14, 15, 16, 17)]
-            matches, mismatches, rep, ncount, qins, qbases, tins, tbases, qsize, qstart, qend, tsize, tstart, tend, block_count = ints
+            counts = [int(fields[i]) for i in range(8)]
+            matches, mismatches, rep, ncount, qins, qbases, tins, tbases = counts
+            qsize, qstart, qend = (int(fields[i]) for i in (10, 11, 12))
+            tsize, tstart, tend, block_count = (int(fields[i]) for i in (14, 15, 16, 17))
             if min(matches, mismatches, rep, ncount, qins, qbases, tins, tbases) < 0:
                 raise ValueError("negative PSL count")
             sizes = [int(x) for x in fields[18].rstrip(",").split(",") if x]
@@ -80,47 +89,85 @@ def parse_halsynteny_psl(
         strand = fields[8]
         if strand not in {"+", "-", "+-", "-+", "++", "--"}:
             raise ExtractionError(f"halSynteny PSL line {line_number}: unsupported strand {strand!r}")
-        if fields[9] != query_genome and fields[9] == "":
+        if not fields[9].strip():
             raise ExtractionError(f"halSynteny PSL line {line_number}: empty query name")
-        if fields[13] != target_genome and fields[13] == "":
+        if not fields[13].strip():
             raise ExtractionError(f"halSynteny PSL line {line_number}: empty target name")
         if not (0 <= qstart <= qend <= qsize and 0 <= tstart <= tend <= tsize):
             raise ExtractionError(f"halSynteny PSL line {line_number}: enclosing coordinates out of range")
         qstrand, tstrand = strand[0], strand[1] if len(strand) == 2 else "+"
-        runs: list[EdgeMappingRun] = []
-        canonical_blocks: list[str] = []
+        q_intervals: list[tuple[int, int]] = []
+        t_intervals: list[tuple[int, int]] = []
         for size, qraw, traw in zip(sizes, qstarts, tstarts, strict=True):
             q0, q1 = (qsize - qraw - size, qsize - qraw) if qstrand == "-" else (qraw, qraw + size)
             t0, t1 = (tsize - traw - size, tsize - traw) if tstrand == "-" else (traw, traw + size)
             if q1 > qsize or t1 > tsize or q1 <= q0 or t1 <= t0:
                 raise ExtractionError(f"halSynteny PSL line {line_number}: block outside sequence bounds")
-            canonical_blocks.append(f"{size}:{q0}:{q1}:{t0}:{t1}")
-        fingerprint = hashlib.sha256(("|".join(fields)).encode()).hexdigest()[:16]
-        block_id = f"HSB_{fingerprint}"
-        occurrence_id = f"{block_id}.occurrence"
-        for component, (size, qraw, traw) in enumerate(zip(sizes, qstarts, tstarts, strict=True), start=1):
-            q0, q1 = (qsize - qraw - size, qsize - qraw) if qstrand == "-" else (qraw, qraw + size)
-            t0, t1 = (tsize - traw - size, tsize - traw) if tstrand == "-" else (traw, traw + size)
-            runs.append(EdgeMappingRun(child_node, block_id, occurrence_id, fields[9], q0, q1,
-                parent_node, fields[13], t0, t1, "+" if qstrand == tstrand else "-",
-                "1", "unique", f"{block_id}:fragment:{component:06d}", "halSynteny", json.dumps(command)))
-        rows.append((tuple(fields), runs))
-    rows.sort(key=lambda row: row[0])
+            q_intervals.append((q0, q1)); t_intervals.append((t0, t1))
+        if any(a[1] > b[0] for a, b in pairwise(sorted(q_intervals))) or any(a[1] > b[0] for a, b in pairwise(sorted(t_intervals))):
+            raise ExtractionError(f"halSynteny PSL line {line_number}: overlapping or out-of-order components")
+        q_raw_order_valid = all(
+            (a + size <= b) if qstrand == "+" else (b + size <= a)
+            for a, b, size in zip(qstarts, qstarts[1:], sizes, strict=False)
+        )
+        t_raw_order_valid = all(
+            (a + size <= b) if tstrand == "+" else (b + size <= a)
+            for a, b, size in zip(tstarts, tstarts[1:], sizes, strict=False)
+        )
+        if not q_raw_order_valid or not t_raw_order_valid:
+            raise ExtractionError(f"halSynteny PSL line {line_number}: component ordering is inconsistent with strand")
+        expected_q_gaps = [next_start - (start + size) for start, next_start, size in zip(qstarts, qstarts[1:], sizes, strict=False)]
+        expected_t_gaps = [next_start - (start + size) for start, next_start, size in zip(tstarts, tstarts[1:], sizes, strict=False)]
+        if qstrand == "-":
+            expected_q_gaps = [start - (next_start + size) for start, next_start, size in zip(qstarts, qstarts[1:], sizes, strict=False)]
+        if tstrand == "-":
+            expected_t_gaps = [start - (next_start + size) for start, next_start, size in zip(tstarts, tstarts[1:], sizes, strict=False)]
+        if qins != sum(gap > 0 for gap in expected_q_gaps) or qbases != sum(max(gap, 0) for gap in expected_q_gaps):
+            raise ExtractionError(f"halSynteny PSL line {line_number}: query insertion counts disagree with components")
+        if tins != sum(gap > 0 for gap in expected_t_gaps) or tbases != sum(max(gap, 0) for gap in expected_t_gaps):
+            raise ExtractionError(f"halSynteny PSL line {line_number}: target insertion counts disagree with components")
+        if (min(a[0] for a in q_intervals), max(a[1] for a in q_intervals)) != (qstart, qend):
+            raise ExtractionError(f"halSynteny PSL line {line_number}: query extrema disagree with qStart/qEnd")
+        if (min(a[0] for a in t_intervals), max(a[1] for a in t_intervals)) != (tstart, tend):
+            raise ExtractionError(f"halSynteny PSL line {line_number}: target extrema disagree with tStart/tEnd")
+        rows.append({"fields": tuple(fields), "qkey": (fields[9], qsize, qstrand, tuple(q_intervals)),
+                     "qname": fields[9], "tname": fields[13], "q_intervals": tuple(q_intervals),
+                     "t_intervals": tuple(t_intervals), "strand": "+" if qstrand == tstrand else "-"})
+    rows.sort(key=lambda row: (row["qkey"], row["fields"]))
+    families: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    for row in rows:
+        families.setdefault(row["qkey"], []).append(row)
     blocks: list[NodeBlock] = []
     all_runs: list[EdgeMappingRun] = []
-    duplicate_counts: dict[str, int] = {}
-    for _fields, original_runs in rows:
-        base_id = original_runs[0].child_block_id
-        duplicate_counts[base_id] = duplicate_counts.get(base_id, 0) + 1
-        ordinal = duplicate_counts[base_id]
-        block_id = base_id if ordinal == 1 else f"{base_id}_dup{ordinal:04d}"
-        runs = tuple(EdgeMappingRun(r.child_node, block_id, f"{block_id}.occurrence", r.child_chrom, r.child_start,
-            r.child_end, r.parent_node, r.parent_chrom, r.parent_start, r.parent_end, r.strand, r.copy_id,
-            "duplicated" if duplicate_counts[base_id] > 1 else r.status, r.source_anchor_id, r.tool, r.command) for r in original_runs)
-        first, last = min(runs, key=lambda r: r.child_start), max(runs, key=lambda r: r.child_end)
-        blocks.append(NodeBlock(first.child_block_id, child_node, first.child_chrom, first.child_start,
-                                last.child_end, "halsynteny_chain", "unique"))
-        all_runs.extend(runs)
+    family_keys = sorted(families, key=repr)
+    overlapping_families: set[tuple[object, ...]] = set()
+    for index, first_key in enumerate(family_keys):
+        for second_key in family_keys[index + 1:]:
+            if first_key[0] != second_key[0] or first_key[2] != second_key[2]:
+                continue
+            if any(a[0] < b[1] and b[0] < a[1] for a in first_key[3] for b in second_key[3]):
+                overlapping_families.update((first_key, second_key))
+    for family_key, alternatives in sorted(families.items(), key=lambda item: repr(item[0])):
+        digest = hashlib.sha256(repr(family_key).encode()).hexdigest()[:16]
+        block_id = f"HSB_{digest}"
+        q_intervals = family_key[3]
+        qchrom = family_key[0]
+        family_status = "duplicated" if len(alternatives) > 1 or family_key in overlapping_families else "unique"
+        blocks.append(NodeBlock(block_id, child_node, qchrom, min(x[0] for x in q_intervals), max(x[1] for x in q_intervals),
+                                "halsynteny_chain", family_status))
+        seen_targets: set[tuple[object, ...]] = set()
+        unique_alternatives = []
+        for alternative in alternatives:
+            target_key = (alternative["tname"], alternative["t_intervals"], alternative["strand"])
+            if target_key not in seen_targets:
+                seen_targets.add(target_key); unique_alternatives.append(alternative)
+        status = family_status
+        for copy_index, alternative in enumerate(unique_alternatives, start=1):
+            occurrence_id = f"{block_id}.occurrence{copy_index:04d}"
+            for component, (q_interval, t_interval) in enumerate(zip(alternative["q_intervals"], alternative["t_intervals"], strict=True), start=1):
+                all_runs.append(EdgeMappingRun(child_node, block_id, occurrence_id, qchrom, q_interval[0], q_interval[1],
+                    parent_node, alternative["tname"], t_interval[0], t_interval[1], alternative["strand"], str(copy_index), status,
+                    f"{block_id}:fragment:{copy_index:04d}:{component:06d}", "halSynteny", json.dumps(command)))
     return tuple(blocks), tuple(all_runs)
 
 
@@ -135,22 +182,27 @@ class HalSyntenyLeafInitializer:
         self.executable = executable or shutil.which("halSynteny")
         if not self.executable:
             raise ExtractionError("missing HAL tool: halSynteny is not on PATH")
+        self.executable = str(Path(self.executable).resolve())
+        self.executable_version = _probe_version(self.executable)
         self.min_block_size = min_block_size
         self.max_anchor_distance = max_anchor_distance
         self.hal_checksum = sha256_file(self.hal_path)
 
     def initialize(self, child_node: str, parent_node: str, query_genome: str, target_genome: str) -> HalSyntenyLeafResult:
-        help_run = subprocess.run((self.executable, "--help"), check=False, capture_output=True, text=True)
-        command = build_halsynteny_command(self.executable, self.hal_path, "/dev/stdout", query_genome, target_genome,
-                                           self.min_block_size, self.max_anchor_distance, help_run.stdout + help_run.stderr)
-        completed = subprocess.run(command, check=False, capture_output=True, text=True)
-        if completed.returncode:
-            raise ExtractionError(f"halSynteny failed with exit {completed.returncode}: {completed.stderr.strip()}")
-        raw = completed.stdout
+        with tempfile.TemporaryDirectory(prefix="hms-synteny-") as temp_name:
+            output = Path(temp_name) / "halsynteny.psl"
+            help_run = subprocess.run((self.executable, "--help"), check=False, capture_output=True, text=True)
+            command = build_halsynteny_command(self.executable, self.hal_path, output.name, query_genome, target_genome,
+                                               self.min_block_size, self.max_anchor_distance, help_run.stdout + help_run.stderr)
+            completed = subprocess.run(command, check=False, capture_output=True, text=True, cwd=temp_name)
+            if completed.returncode:
+                raise ExtractionError(f"halSynteny failed with exit {completed.returncode}: {completed.stderr.strip()}")
+            raw = output.read_text(encoding="utf-8") if output.exists() else completed.stdout
         blocks, runs = parse_halsynteny_psl(raw, child_node=child_node, parent_node=parent_node,
                                            query_genome=query_genome, target_genome=target_genome, command=command)
-        return HalSyntenyLeafResult(blocks, (), (), runs, raw, command, completed.stdout, completed.stderr,
-                                    {"halSynteny": _probe_version(self.executable)})
+        version = self.executable_version
+        return HalSyntenyLeafResult(blocks, runs, raw, command, completed.stdout, completed.stderr,
+                                    {"halSynteny": version}, str(self.executable), version)
 
 
 @dataclass(frozen=True, slots=True)

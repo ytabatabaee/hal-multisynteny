@@ -454,6 +454,7 @@ def _membership(atom: _Atom) -> tuple[object, ...]:
         return tuple(
             sorted(
                 (
+                    record.child_node,
                     record.child_block_id,
                     record.child_occurrence_id,
                     record.species,
@@ -461,9 +462,6 @@ def _membership(atom: _Atom) -> tuple[object, ...]:
                     record.strand,
                     record.copy_id,
                     record.status,
-                    record.source_anchor_id,
-                    str(record.start),
-                    str(record.end),
                 )
                 for record in records
             )
@@ -472,37 +470,22 @@ def _membership(atom: _Atom) -> tuple[object, ...]:
     return atom.classification, signature(atom.left), signature(atom.right)
 
 
-def merge_decision(previous: _Atom, current: _Atom, config: ReconcileConfig, parent_node: str = "") -> MergeDecision:
+def merge_decision(
+    previous: _Atom,
+    current: _Atom,
+    config: ReconcileConfig,
+    parent_node: str = "",
+    intervening_filtered: bool = False,
+) -> MergeDecision:
     reasons: list[str] = []
     gap = current.start - previous.end
     if previous.chrom != current.chrom:
         reasons.append("different_parent_chromosome")
     if gap > config.max_merge_gap:
         reasons.append("parent_gap_exceeds_threshold")
+    if intervening_filtered:
+        reasons.append("intervening_filtered_atom")
     if reasons:
-        return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
-                             False, "", tuple(reasons), gap, _child_gap_text(previous, current, "left"), _child_gap_text(previous, current, "right"))
-    if _membership(previous) == _membership(current):
-        # Exact record membership makes descendant projections collinear and monotonic.
-        ok = all(
-            record.parent_start <= previous.start and record.parent_end >= current.end
-            for record in previous.left + previous.right
-        )
-        return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
-                             ok, "merge_compatible" if ok else "intervening_filtered_atom", () if ok else ("intervening_filtered_atom",),
-                             gap, _child_gap_text(previous, current, "left"), _child_gap_text(previous, current, "right"))
-    if (
-        previous.classification != current.classification
-        or current.start != previous.end
-        or min(previous.end - previous.start, current.end - current.start)
-        > config.boundary_tolerance
-    ):
-        if previous.classification != current.classification:
-            reasons.append("different_classification")
-        if current.start != previous.end:
-            reasons.append("intervening_filtered_atom")
-        if min(previous.end - previous.start, current.end - current.start) > config.boundary_tolerance:
-            reasons.append("boundary_atom_exceeds_tolerance")
         return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
                              False, "", tuple(reasons), gap, _child_gap_text(previous, current, "left"), _child_gap_text(previous, current, "right"))
 
@@ -534,13 +517,34 @@ def merge_decision(previous: _Atom, current: _Atom, config: ReconcileConfig, par
                 return False
         return True
 
+    if previous.classification != current.classification:
+        reasons.append("different_classification")
+    same_membership = _membership(previous) == _membership(current)
+    if not same_membership and min(previous.end - previous.start, current.end - current.start) > config.boundary_tolerance:
+        reasons.append("boundary_atom_exceeds_tolerance")
+    previous_records = previous.left + previous.right
+    current_records = current.left + current.right
+    if any(record.status == "ambiguous" for record in previous_records + current_records):
+        reasons.append("ambiguous_continuation")
+    if any(first.chrom != second.chrom for first, second in zip(previous_records, current_records)):
+        reasons.append("descendant_chromosome_change")
+    if any(first.strand != second.strand for first, second in zip(previous_records, current_records)):
+        reasons.append("orientation_change")
+    if any(first.copy_id != second.copy_id for first, second in zip(previous_records, current_records)):
+        reasons.append("copy_identity_change")
+    if any(record.status == "duplicated" for record in previous_records + current_records):
+        reasons.append("duplication_conflict")
     left_ok = side_is_collinear(previous.left, current.left)
     right_ok = side_is_collinear(previous.right, current.right)
+    if (not left_ok or not right_ok) and not same_membership:
+        reasons.append("different_child_support")
     if not left_ok:
         reasons.append("non_collinear_forward" if any(r.strand == "+" for r in previous.left + current.left) else "non_collinear_reverse")
     if not right_ok:
         reasons.append("non_collinear_forward" if any(r.strand == "+" for r in previous.right + current.right) else "non_collinear_reverse")
-    ok = left_ok and right_ok
+    ok = not reasons and left_ok and right_ok
+    if not ok and left_ok and right_ok and not reasons:
+        reasons.append("different_child_support")
     return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
                          ok, "merge_compatible" if ok else "", tuple(dict.fromkeys(reasons)), gap,
                          _child_gap_text(previous, current, "left"), _child_gap_text(previous, current, "right"))
@@ -553,7 +557,7 @@ def _child_gap_text(previous: _Atom, current: _Atom, side: str) -> str:
     for first in before:
         for second in after:
             if first.chrom == second.chrom and first.strand == second.strand:
-                values.append(str(abs(second.start - first.end) if first.strand == "+" else abs(first.start - second.end)))
+                values.append(str(second.start - first.end if first.strand == "+" else first.start - second.end))
     return ",".join(sorted(set(values)))
 
 
@@ -757,7 +761,7 @@ def reconcile_node(
             continue
         if groups and hit_barrier:
             previous = groups[-1][-1]
-            base = merge_decision(previous, atom, config, parent_node)
+            base = merge_decision(previous, atom, config, parent_node, intervening_filtered=True)
             decisions.append(MergeDecision(base.parent_node, base.parent_chrom, base.left_start, base.left_end,
                 base.right_start, base.right_end, False, "", tuple(dict.fromkeys(base.rejection_reasons + ("intervening_filtered_atom",))),
                 base.parent_gap, base.left_child_gaps, base.right_child_gaps))
@@ -853,8 +857,8 @@ def reconcile_node(
                 if not atom.retained
                 else "identical evidence; collinear monotonic projections"
                 if merged
-                else next((d.rejection_reasons[0] if d.rejection_reasons else d.accepted_reason
-                           for d in decisions if d.right_start == atom.start and d.left_end == atom.start), "not_merged"),
+                else next((d.accepted_reason if d.can_merge else "not_merged"
+                           for d in decisions if d.right_start == atom.start), "not_merged"),
                 atom.block_id,
             )
         )
