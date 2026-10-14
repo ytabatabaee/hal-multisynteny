@@ -4,11 +4,13 @@ Repository commit: `2dc6ead4d7f31d9c6c857994953372a7d9010794`
 HAL compressed SHA-256: `544c280bfa1880e8ba2de99bfc404d68e40539a8a5332cdff9b20cdc1e27182f`
 HAL decompressed SHA-256: `33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831`
 
-## Scope and topology
+## HAL/PSL semantics
 
-The all-direct plan contains eight unique HAL child-to-parent edges. The extant leaf scope remains available through the original configured-leaf configuration. The root is `PalaeognathaeAnc0`; internal ancestor edges are reported separately from extant leaf edges. `halLiftover --outPSLWithName` was used for the source-aware diagnostic; PSL q-side and t-side components supply source and target coordinates, and no BED6 coordinate interpolation is performed.
+`halLiftover --help` identifies `--outPSLWithName` as input BED name followed by a PSL line. The HAL source calls these output records `BedLine` objects, groups mapped blocks by compatibility, and starts a new output record for incompatible or duplicate source blocks; it does not emit a biological chain or alternative identifier. HAL documentation also states that liftover follows paralogy. Therefore this diagnostic assigns only a line-based `psl_record_id`, reports multiple records as unresolved, and does not call them duplication or separate chains.
 
-## Eight-edge BED6 audit
+PSL qStart/qEnd and tStart/tEnd are forward-strand coordinates. For a negative strand, qStarts/tStarts are strand-relative and are normalized with `size - start - blockSize`; components are sorted by normalized source-forward coordinates for gap reporting. A one-character strand identifies query orientation; a two-character strand also identifies target orientation. Sources: [HAL halLiftover implementation](https://github.com/ComparativeGenomicsToolkit/hal/blob/master/liftover/impl/halLiftover.cpp) and [UCSC PSL specification](https://genome.ucsc.edu/FAQ/FAQformat).
+
+## Eight-edge BED6 audit (unchanged)
 
 | Edge | Unique | Unmapped | Split | Gapped/changed | Invalid | BED6 inadequate |
 |---|---:|---:|---:|---:|---:|---:|
@@ -21,54 +23,61 @@ The all-direct plan contains eight unique HAL child-to-parent edges. The extant 
 | `PalaeognathaeAnc2 -> PalaeognathaeAnc1` | 1409 | 840 | 3665 | 86 | 0 | 3751/6000 (62.52%) |
 | `PalaeognathaeAnc3 -> PalaeognathaeAnc2` | 1295 | 1181 | 3438 | 86 | 0 | 3524/6000 (58.73%) |
 
-## Source-aware diagnostic
+## Revised source-aware diagnostic
 
-| Scope | Unique contiguous | Split collinear | Split with source gaps | Rearranged/orientation | Multi-mapping/duplication | Unmapped | Invalid/ambiguous |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| extant leaf edge | 250/6000 (4.17%) | 179/6000 (2.98%) | 2417/6000 (40.28%) | 0/6000 (0.00%) | 296/6000 (4.93%) | 2858/6000 (47.63%) | 0/6000 (0.00%) |
-| internal ancestor edge | 4142/18000 (23.01%) | 1615/18000 (8.97%) | 7956/18000 (44.20%) | 0/18000 (0.00%) | 1733/18000 (9.63%) | 2554/18000 (14.19%) | 0/18000 (0.00%) |
-
-## Source-aware interpretation by requested edge
-
-| Edge | Unique | Collinear split | Source-gapped split | Rearranged | Multi/duplication | Unmapped |
+| Scope | Full coverage | Source gaps | Rearranged/orientation observation | Multiple records unresolved | Unmapped | Invalid/ambiguous |
 |---|---:|---:|---:|---:|---:|---:|
-| GCF_028389875.1 -> PalaeognathaeAnc2 | 250/6000 | 179/6000 | 2417/6000 | 0/6000 | 296/6000 | 2858/6000 |
-| PalaeognathaeAnc1 -> PalaeognathaeAnc0 | 1438/6000 | 747/6000 | 2674/6000 | 0/6000 | 608/6000 | 533/6000 |
-| PalaeognathaeAnc2 -> PalaeognathaeAnc1 | 1409/6000 | 388/6000 | 2658/6000 | 0/6000 | 705/6000 | 840/6000 |
-| PalaeognathaeAnc3 -> PalaeognathaeAnc2 | 1295/6000 | 480/6000 | 2624/6000 | 0/6000 | 420/6000 | 1181/6000 |
+| extant leaf edge | 429/6000 (7.15%) | 2417/6000 (40.28%) | 0/6000 (0.00%) | 296/6000 (4.93%) | 2858/6000 (47.63%) | 0/6000 (0.00%) |
+| internal ancestor edge | 5757/18000 (31.98%) | 7956/18000 (44.20%) | 0/18000 (0.00%) | 1733/18000 (9.63%) | 2554/18000 (14.19%) | 0/18000 (0.00%) |
 
-## Length-bin BED6 results
+## Source-aware results by edge
 
-| Length bin | Total | Split | Gapped/changed | Invalid | Inadequate |
-|---|---:|---:|---:|---:|---:|
-| 100-499 | 8000 | 2093 | 80 | 0 | 2173/8000 (27.16%) |
-| 1000-4999 | 8000 | 3815 | 80 | 0 | 3895/8000 (48.69%) |
-| 10000-50000 | 8000 | 4518 | 9 | 0 | 4527/8000 (56.59%) |
-| 50-99 | 8000 | 1049 | 120 | 0 | 1169/8000 (14.61%) |
-| 500-999 | 8000 | 2914 | 113 | 0 | 3027/8000 (37.84%) |
-| 5000-9999 | 8000 | 4272 | 38 | 0 | 4310/8000 (53.87%) |
+| Edge | Records | Full | Gaps | Rearranged/orientation | Multiple records | Unmapped |
+|---|---:|---:|---:|---:|---:|---:|
+| GCF_028389875.1 -> PalaeognathaeAnc2 | 3670 | 429/6000 | 2417/6000 | 0/6000 | 296/6000 | 2858/6000 |
+| PalaeognathaeAnc1 -> PalaeognathaeAnc0 | 6561 | 2185/6000 | 2674/6000 | 0/6000 | 608/6000 | 533/6000 |
+| PalaeognathaeAnc2 -> PalaeognathaeAnc1 | 6770 | 1797/6000 | 2658/6000 | 0/6000 | 705/6000 | 840/6000 |
+| PalaeognathaeAnc3 -> PalaeognathaeAnc2 | 5551 | 1775/6000 | 2624/6000 | 0/6000 | 420/6000 | 1181/6000 |
 
-## Source-aware results by length bin
+Primary classification counts are conservative. Multiple PSL records are unresolved even when source coverage is disjoint. Across the four diagnostics, objective flags include overlapping and disjoint record coverage, multiple target chromosomes/strands, joint collinearity, duplicated source coverage, and global uncovered source bases; these are retained in the compact TSV tables. Components within one record reset `source_gap_before` at each record boundary. Component intervals are reported as observed intervals, never biological loci.
 
-| Scope/bin | Unique | Collinear split | Source-gapped split | Multi/duplication | Unmapped |
-|---|---:|---:|---:|---:|---:|
-| extant leaf edge / 100-499 | 56 | 65 | 362 | 1 | 516 |
-| extant leaf edge / 1000-4999 | 0 | 4 | 515 | 35 | 446 |
-| extant leaf edge / 10000-50000 | 0 | 0 | 389 | 184 | 427 |
-| extant leaf edge / 50-99 | 184 | 75 | 213 | 0 | 528 |
-| extant leaf edge / 500-999 | 10 | 35 | 466 | 8 | 481 |
-| extant leaf edge / 5000-9999 | 0 | 0 | 472 | 68 | 460 |
-| internal ancestor edge / 100-499 | 1283 | 430 | 649 | 31 | 607 |
-| internal ancestor edge / 1000-4999 | 269 | 330 | 1745 | 270 | 386 |
-| internal ancestor edge / 10000-50000 | 3 | 22 | 2017 | 843 | 115 |
-| internal ancestor edge / 50-99 | 1752 | 217 | 273 | 6 | 752 |
-| internal ancestor edge / 500-999 | 801 | 517 | 1084 | 96 | 502 |
-| internal ancestor edge / 5000-9999 | 34 | 99 | 2188 | 487 | 192 |
+## Length-bin results
 
-## Validation and decision
+The compact `palaeognathae-source-aware-by-bin.tsv` records the same six bins for each requested edge. Counts below are in the same order as the sampled intervals in each bin; rearranged and invalid classifications are zero in these four runs because no such parser-produced records occurred.
 
-The all-direct run classified 48000 of 48000 sampled intervals across 8 edges, with 0 incomplete batches and 983452 BED fragments. The BED6 audit remains an engineering preflight and does not call unmapped intervals biological deletions.
+| Edge | Bin | Full | Gaps | Multiple | Unmapped | Rearranged | Invalid |
+|---|---|---:|---:|---:|---:|---:|---:|
+| GCF_028389875.1 -> PalaeognathaeAnc2 | 50-99 | 259 | 213 | 0 | 528 | 0 | 0 |
+| GCF_028389875.1 -> PalaeognathaeAnc2 | 100-499 | 121 | 362 | 1 | 516 | 0 | 0 |
+| GCF_028389875.1 -> PalaeognathaeAnc2 | 500-999 | 45 | 466 | 8 | 481 | 0 | 0 |
+| GCF_028389875.1 -> PalaeognathaeAnc2 | 1000-4999 | 4 | 515 | 35 | 446 | 0 | 0 |
+| GCF_028389875.1 -> PalaeognathaeAnc2 | 5000-9999 | 0 | 472 | 68 | 460 | 0 | 0 |
+| GCF_028389875.1 -> PalaeognathaeAnc2 | 10000-50000 | 0 | 389 | 184 | 427 | 0 | 0 |
+| PalaeognathaeAnc1 -> PalaeognathaeAnc0 | 50-99 | 740 | 87 | 2 | 171 | 0 | 0 |
+| PalaeognathaeAnc1 -> PalaeognathaeAnc0 | 100-499 | 639 | 201 | 11 | 149 | 0 | 0 |
+| PalaeognathaeAnc1 -> PalaeognathaeAnc0 | 500-999 | 488 | 345 | 44 | 123 | 0 | 0 |
+| PalaeognathaeAnc1 -> PalaeognathaeAnc0 | 1000-4999 | 244 | 593 | 98 | 65 | 0 | 0 |
+| PalaeognathaeAnc1 -> PalaeognathaeAnc0 | 5000-9999 | 61 | 767 | 153 | 19 | 0 | 0 |
+| PalaeognathaeAnc1 -> PalaeognathaeAnc0 | 10000-50000 | 13 | 681 | 300 | 6 | 0 | 0 |
+| PalaeognathaeAnc2 -> PalaeognathaeAnc1 | 50-99 | 632 | 100 | 4 | 264 | 0 | 0 |
+| PalaeognathaeAnc2 -> PalaeognathaeAnc1 | 100-499 | 541 | 252 | 12 | 195 | 0 | 0 |
+| PalaeognathaeAnc2 -> PalaeognathaeAnc1 | 500-999 | 427 | 377 | 36 | 160 | 0 | 0 |
+| PalaeognathaeAnc2 -> PalaeognathaeAnc1 | 1000-4999 | 165 | 597 | 116 | 122 | 0 | 0 |
+| PalaeognathaeAnc2 -> PalaeognathaeAnc1 | 5000-9999 | 26 | 718 | 197 | 59 | 0 | 0 |
+| PalaeognathaeAnc2 -> PalaeognathaeAnc1 | 10000-50000 | 6 | 614 | 340 | 40 | 0 | 0 |
+| PalaeognathaeAnc3 -> PalaeognathaeAnc2 | 50-99 | 597 | 86 | 0 | 317 | 0 | 0 |
+| PalaeognathaeAnc3 -> PalaeognathaeAnc2 | 100-499 | 533 | 196 | 8 | 263 | 0 | 0 |
+| PalaeognathaeAnc3 -> PalaeognathaeAnc2 | 500-999 | 403 | 362 | 16 | 219 | 0 | 0 |
+| PalaeognathaeAnc3 -> PalaeognathaeAnc2 | 1000-4999 | 190 | 555 | 56 | 199 | 0 | 0 |
+| PalaeognathaeAnc3 -> PalaeognathaeAnc2 | 5000-9999 | 46 | 703 | 137 | 114 | 0 | 0 |
+| PalaeognathaeAnc3 -> PalaeognathaeAnc2 | 10000-50000 | 6 | 722 | 203 | 69 | 0 | 0 |
 
-**Recommendation: CONDITIONAL.** Proceeding to reconstruction should wait for the richer source-aware backend to be integrated and validated. The diagnostic shows that much of the BED6 inadequacy is representable source-aware fragmentation (`split_collinear` and `split_with_source_gaps`), while multi-mapping/duplication and unmapped sequence require separate biological handling. Genuine rearrangement/orientation conflicts are reported independently. The current diagnostic supports faithful fragment representation for the observed split mappings, subject to preserving chain identity and alternative mappings in reconciliation.
+The existing BED6 by-bin results remain unchanged and are included in the previous all-direct audit output.
 
-No bottom-up reconstruction was run. No merge thresholds or reconciliation semantics were changed.
+## Validation and recommendation
+
+The valid eight-edge BED6 audit remains 48000 classified intervals across eight edges with no incomplete batches. The source-aware diagnostic was regenerated from the same sampled intervals for four requested edges. No controlled inversion or duplication case is available in the current tiny fixture, so those biological interpretations are not claimed from this diagnostic.
+
+**Recommendation: NO-GO.** Do not proceed to bottom-up reconstruction based on the source-aware diagnostic yet. PSL preserves source components and target coordinates, but HAL does not document whether multiple output records are alternative paralogous mappings or pieces of one rearranged mapping. A production backend needs an explicit HAL mapping-path/alternative identity or a controlled fixture that establishes those semantics.
+
+No reconciliation logic, merge thresholds, or production liftover backend were changed.
