@@ -1,0 +1,9 @@
+block_id	logical_child	hal_genome	chrom	start	end	length	length_bin	sampling_seed	sampling_method
+A_unique	A	HAL_A	chrA	0	10	10	10-20	20261001	fixture_expected
+A_inversion	A	HAL_A	chrA	10	20	10	10-20	20261001	fixture_expected
+A_unmapped	A	HAL_A	chrA	40	50	10	10-20	20261001	fixture_expected
+A_split	A	HAL_A	chrA	60	80	20	10-20	20261001	fixture_expected
+B_unique	B	HAL_B	chrB	0	10	10	10-20	20261001	fixture_expected
+B_inversion	B	HAL_B	chrB	10	20	10	10-20	20261001	fixture_expected
+C_unique	C	HAL_C	chrC	0	10	10	10-20	20261001	fixture_expected
+D_unique	D	HAL_D	chrD	0	10	10	10-20	20261001	fixture_expected

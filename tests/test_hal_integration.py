@@ -11,6 +11,13 @@ from pathlib import Path
 import pytest
 
 from hal_multisynteny.audit import audit_liftover
+from hal_multisynteny.audit_workflow import (
+    assess_audit,
+    plan_audit,
+    run_audit,
+    sample_intervals,
+    summarize_audit,
+)
 from hal_multisynteny.extract import ExtractionError, HalEdgeExtractor
 from hal_multisynteny.hal import inspect_hal
 from hal_multisynteny.models import NodeBlock
@@ -224,3 +231,34 @@ def test_tiny_hal_four_leaf_traversal_resume_force_and_determinism(tiny_hal_mani
             b = run_b / "nodes" / node / name
             if a.exists() or b.exists():
                 assert a.read_bytes() == b.read_bytes(), (node, name)
+
+
+def test_tiny_hal_sampled_audit_workflow(tiny_hal_manifest, tmp_path):
+    fixture_dir = Path(str(tiny_hal_manifest["_fixture_dir"]))
+    config = fixture_dir / "audit-config.json"
+    plan_path = tmp_path / "audit-plan.json"
+    sampled = tmp_path / "sampled"
+    audit = tmp_path / "audit-results"
+    plan = plan_audit(config, plan_path)
+    assert len(plan["edges"]) == 4
+    sample_summary = sample_intervals(
+        config_path=config,
+        plan_path=plan_path,
+        blocks_path=fixture_dir / "audit_external_blocks.tsv",
+        output_dir=sampled,
+    )
+    assert sample_summary["interval_count"] == 8
+    run_audit(config_path=config, plan_path=plan_path, sampled_blocks=sampled, output_dir=audit, resume=True)
+    resumed = run_audit(config_path=config, plan_path=plan_path, sampled_blocks=sampled, output_dir=audit, resume=True)
+    assert len(resumed["batches"]) == 4
+    summary = summarize_audit(audit, tmp_path / "tiny-hal")
+    assert summary["category_counts"] == {
+        "unique_full_length": 5,
+        "multi_full_length": 0,
+        "unmapped": 1,
+        "split": 1,
+        "gapped_or_length_changed": 0,
+        "invalid_output": 0,
+    }
+    decision = assess_audit(tmp_path / "tiny-hal.summary.json", tmp_path / "tiny-hal.readiness.md")
+    assert decision == "NO-GO"

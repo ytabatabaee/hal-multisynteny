@@ -1,0 +1,43 @@
+{
+  "audit_id": "tiny-hal-audit",
+  "clade_root": "HAL_root",
+  "execution": {
+    "batch_size": 2,
+    "resume": true,
+    "workers": 1
+  },
+  "hal": "build/tiny.hal",
+  "leaves": [
+    {
+      "hal_genome": "HAL_A",
+      "logical_name": "A"
+    },
+    {
+      "hal_genome": "HAL_B",
+      "logical_name": "B"
+    },
+    {
+      "hal_genome": "HAL_C",
+      "logical_name": "C"
+    },
+    {
+      "hal_genome": "HAL_D",
+      "logical_name": "D"
+    }
+  ],
+  "output_dir": "tiny-hal-output/audit-workflow",
+  "random_seed": 20261001,
+  "sampling": {
+    "avoid_overlaps": false,
+    "chromosomes": "all",
+    "exclude_sequences_regex": null,
+    "intervals_per_length_bin": 0,
+    "length_bins": [
+      [
+        10,
+        20
+      ]
+    ],
+    "maximum_ambiguous_fraction": null
+  }
+}

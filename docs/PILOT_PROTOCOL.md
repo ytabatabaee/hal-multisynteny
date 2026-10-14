@@ -64,3 +64,12 @@ not yet supported unless the HAL output preserves exact source subintervals, so
 tiny HAL fixtures for identity, inversion, deletion/unmapped intervals,
 duplication, and gapped mappings should pass before drawing biological
 conclusions from a bird or fish pilot.
+
+## Pre-pilot real-data liftover audit
+
+Before attempting a small bird/fish reconciliation, run the real-data audit in
+`docs/REAL_DATA_AUDIT.md` on the exact HAL file, exact HAL genome names, and the
+chosen direct child-to-parent edges. Use the by-length-bin report to determine
+whether longer candidate blocks are likely to split or change length under BED6
+liftover. A small reconciliation pilot should wait until the audit produces a
+GO or an understood CONDITIONAL result for the intended interval source.

@@ -10,6 +10,13 @@ from pathlib import Path
 
 from . import __version__
 from .audit import audit_liftover
+from .audit_workflow import (
+    assess_audit,
+    plan_audit,
+    run_audit,
+    sample_intervals,
+    summarize_audit,
+)
 from .builder import BuildConfig, build_blocks
 from .hal import inspect_hal, write_hal_info
 from .io import (
@@ -265,6 +272,55 @@ def _audit_liftover(args: argparse.Namespace) -> int:
     return 0
 
 
+def _plan_audit(args: argparse.Namespace) -> int:
+    plan = plan_audit(args.config, args.output)
+    print(
+        f"planned {len(plan['edges'])} direct edge(s), "
+        f"{plan['requested_interval_count']} requested interval(s)"
+    )
+    return 0
+
+
+def _sample_intervals(args: argparse.Namespace) -> int:
+    summary = sample_intervals(
+        config_path=args.config,
+        output_dir=args.output_dir,
+        plan_path=args.plan,
+        blocks_path=args.blocks,
+    )
+    print(f"sampled {summary['interval_count']} interval(s)")
+    return 0
+
+
+def _run_audit(args: argparse.Namespace) -> int:
+    result = run_audit(
+        config_path=args.config,
+        plan_path=args.plan,
+        sampled_blocks=args.sampled_blocks,
+        output_dir=args.output_dir,
+        resume=args.resume,
+        dry_run=args.dry_run,
+    )
+    print(
+        "audit dry run planned"
+        if args.dry_run
+        else f"completed {len(result['batches'])} batch record(s)"
+    )
+    return 0
+
+
+def _summarize_audit(args: argparse.Namespace) -> int:
+    summary = summarize_audit(args.audit_dir, args.output_prefix)
+    print(f"summarized {summary['classified_interval_count']} classified interval(s)")
+    return 0
+
+
+def _assess_audit(args: argparse.Namespace) -> int:
+    decision = assess_audit(args.summary, args.output)
+    print(f"readiness decision: {decision}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="hal-multisynteny")
     parser.add_argument("--version", action="version", version=__version__)
@@ -350,6 +406,37 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--blocks", required=True)
     audit.add_argument("--output-prefix", required=True)
     audit.set_defaults(func=_audit_liftover)
+
+    plan = subparsers.add_parser("plan-audit", help="plan a direct-edge HAL liftover audit")
+    plan.add_argument("--config", required=True)
+    plan.add_argument("--output", required=True)
+    plan.set_defaults(func=_plan_audit)
+
+    sample = subparsers.add_parser("sample-intervals", help="sample reproducible audit intervals")
+    sample.add_argument("--config", required=True)
+    sample.add_argument("--output-dir", required=True)
+    sample.add_argument("--plan")
+    sample.add_argument("--blocks", help="optional external sampled block TSV")
+    sample.set_defaults(func=_sample_intervals)
+
+    run_audit_parser = subparsers.add_parser("run-audit", help="run a batched direct-edge audit")
+    run_audit_parser.add_argument("--config", required=True)
+    run_audit_parser.add_argument("--plan", required=True)
+    run_audit_parser.add_argument("--sampled-blocks", required=True)
+    run_audit_parser.add_argument("--output-dir", required=True)
+    run_audit_parser.add_argument("--resume", action="store_true")
+    run_audit_parser.add_argument("--dry-run", action="store_true")
+    run_audit_parser.set_defaults(func=_run_audit)
+
+    summarize = subparsers.add_parser("summarize-audit", help="aggregate audit outcomes")
+    summarize.add_argument("--audit-dir", required=True)
+    summarize.add_argument("--output-prefix", required=True)
+    summarize.set_defaults(func=_summarize_audit)
+
+    assess = subparsers.add_parser("assess-audit", help="write a provisional readiness report")
+    assess.add_argument("--summary", required=True)
+    assess.add_argument("--output", required=True)
+    assess.set_defaults(func=_assess_audit)
     return parser
 
 

@@ -51,6 +51,43 @@ python "${repo_dir}/scripts/validate_tiny_hal_outputs.py" \
   --fixture-dir "${fixture_dir}" \
   --output-dir "${out_dir}"
 
+workflow_dir="${out_dir}/audit-workflow"
+hal-multisynteny plan-audit \
+  --config "${fixture_dir}/audit-config.json" \
+  --output "${workflow_dir}/audit-plan.json"
+hal-multisynteny sample-intervals \
+  --config "${fixture_dir}/audit-config.json" \
+  --plan "${workflow_dir}/audit-plan.json" \
+  --blocks "${fixture_dir}/audit_external_blocks.tsv" \
+  --output-dir "${workflow_dir}/sampled-blocks"
+hal-multisynteny run-audit \
+  --config "${fixture_dir}/audit-config.json" \
+  --plan "${workflow_dir}/audit-plan.json" \
+  --sampled-blocks "${workflow_dir}/sampled-blocks" \
+  --output-dir "${workflow_dir}/audit-results" \
+  --resume
+hal-multisynteny run-audit \
+  --config "${fixture_dir}/audit-config.json" \
+  --plan "${workflow_dir}/audit-plan.json" \
+  --sampled-blocks "${workflow_dir}/sampled-blocks" \
+  --output-dir "${workflow_dir}/audit-results" \
+  --resume
+hal-multisynteny summarize-audit \
+  --audit-dir "${workflow_dir}/audit-results" \
+  --output-prefix "${workflow_dir}/tiny-hal"
+hal-multisynteny assess-audit \
+  --summary "${workflow_dir}/tiny-hal.summary.json" \
+  --output "${workflow_dir}/tiny-hal.readiness.md"
+python - "${workflow_dir}/tiny-hal.summary.json" <<'PY'
+import json
+import sys
+summary = json.loads(open(sys.argv[1], encoding="utf-8").read())
+expected = {"unique_full_length": 5, "multi_full_length": 0, "unmapped": 1, "split": 1, "gapped_or_length_changed": 0, "invalid_output": 0}
+for key, value in expected.items():
+    assert summary["category_counts"][key] == value, summary["category_counts"]
+print("workflow audit counts:", summary["category_counts"])
+PY
+
 hal-multisynteny run-tree \
   --hal "${hal}" \
   --tree "${fixture_dir}/tree.nwk" \
@@ -120,4 +157,4 @@ for node in ancAB ancCD root; do
   done
 done
 
-echo "tiny HAL integration passed: audits, semantic checkpoints, resume, force-node, and byte-stable scientific outputs"
+echo "tiny HAL integration passed: audits, semantic checkpoints, audit workflow, resume, force-node, and byte-stable scientific outputs"

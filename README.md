@@ -477,3 +477,24 @@ checkpoint and in `ancAB/left_unmapped_edge_evidence.tsv`, but it has no ancAB
 coordinates, does not create a spatial ancAB or root block, and does not imply a
 biological deletion. Carrying such evidence upward without coordinates is a
 future schema extension, not current behavior.
+
+## Real-data liftover audit
+
+Before any controlled bird/fish reconciliation, use the direct-edge audit
+workflow to quantify whether the current BED6 `halLiftover` backend is adequate
+on the target HAL. The workflow is JSON-configured and consists of:
+
+```bash
+hal-multisynteny plan-audit --config vgp-birds-audit.json --output audit-plan.json
+hal-multisynteny sample-intervals --config vgp-birds-audit.json --plan audit-plan.json --output-dir sampled-blocks
+hal-multisynteny run-audit --config vgp-birds-audit.json --plan audit-plan.json --sampled-blocks sampled-blocks --output-dir audit-results --resume
+hal-multisynteny summarize-audit --audit-dir audit-results --output-prefix results/vgp-birds
+hal-multisynteny assess-audit --summary results/vgp-birds.summary.json --output results/vgp-birds.readiness.md
+```
+
+See [docs/REAL_DATA_AUDIT.md](docs/REAL_DATA_AUDIT.md) for the configuration
+schema, output tables, category definitions, and provisional GO/CONDITIONAL/NO-GO
+criteria. The audit samples random genomic intervals or imports external block
+sets as an engineering diagnostic. It audits only direct child-to-parent HAL
+mappings and does not infer biological absence, rearrangement trees, or final
+synteny blocks.

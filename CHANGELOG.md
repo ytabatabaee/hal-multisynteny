@@ -2,6 +2,8 @@
 
 ## Next validation milestone - Unreleased
 
+- Add a JSON-configured real-data direct-edge liftover audit workflow with planning, deterministic sampling, batched execution, aggregation, and provisional readiness reporting.
+- Add audit workflow tests with fake HAL executables covering config validation, direct-edge validation, sampling determinism, batching/resume identity, aggregation reconciliation, base-weighted fractions, and readiness classification.
 - Add GitHub Actions CI for Python 3.10, 3.11, and 3.12, plus a dedicated HAL
   integration job that builds the tiny fixture and runs HAL-marked tests.
 - Add reproducible tiny-HAL fixture sources, a fixture builder, local integration
