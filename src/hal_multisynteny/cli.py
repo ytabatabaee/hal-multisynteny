@@ -247,6 +247,10 @@ def _run_tree(args: argparse.Namespace) -> int:
             backend=args.backend,
             fake_mappings=args.fake_mappings,
             hal=args.hal,
+            leaf_init=args.leaf_init,
+            hal_synteny_min_block_size=args.hal_synteny_min_block_size,
+            hal_synteny_max_anchor_distance=args.hal_synteny_max_anchor_distance,
+            close_unmerged_threshold=args.close_unmerged_threshold,
         ),
     )
     print("dry-run plan written" if args.dry_run else "tree run complete")
@@ -386,7 +390,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--hal")
     run.add_argument("--tree", required=True)
     run.add_argument("--node-map", required=True)
-    run.add_argument("--leaf-blocks", required=True)
+    run.add_argument("--leaf-blocks")
     run.add_argument("--output-dir", required=True)
     run.add_argument("--min-block-length", type=int, default=50)
     run.add_argument("--boundary-tolerance", type=int, default=1)
@@ -397,6 +401,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--dry-run", action="store_true")
     run.add_argument("--backend", choices=("fake", "hal"), default="fake")
     run.add_argument("--fake-mappings")
+    run.add_argument("--leaf-init", choices=("supplied", "halsynteny"), default="supplied")
+    run.add_argument("--hal-synteny-min-block-size", type=int, default=50)
+    run.add_argument("--hal-synteny-max-anchor-distance", type=int, default=1000)
+    run.add_argument("--close-unmerged-threshold", type=int, default=1000)
     run.set_defaults(func=_run_tree)
 
     audit = subparsers.add_parser("audit-liftover", help="audit raw halLiftover BED output")

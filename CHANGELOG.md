@@ -2,6 +2,11 @@
 
 ## Next validation milestone - Unreleased
 
+- Add direct `halSynteny` leaf initialization with strict PSL fragment parsing,
+  deterministic local chain IDs, preserved alternatives, raw provenance, and
+  constrained `halLiftover` continuation for internal nodes.
+- Add node-level fragmentation statistics, structured merge decisions, close
+  unmerged diagnostics, and deterministic postorder tree-wide reports.
 - Add a JSON-configured real-data direct-edge liftover audit workflow with planning, deterministic sampling, batched execution, aggregation, and provisional readiness reporting.
 - Add audit workflow tests with fake HAL executables covering config validation, direct-edge validation, sampling determinism, batching/resume identity, aggregation reconciliation, base-weighted fractions, and readiness classification.
 - Add GitHub Actions CI for Python 3.10, 3.11, and 3.12, plus a dedicated HAL

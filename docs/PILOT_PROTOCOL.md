@@ -38,15 +38,32 @@ hal-multisynteny run-tree \
   --hal alignment.hal \
   --tree pilot.nwk \
   --node-map node-map.tsv \
-  --leaf-blocks leaf-blocks/ \
+  --leaf-init halsynteny \
   --output-dir pilot-run/ \
   --min-block-length 50 \
   --boundary-tolerance 1 \
   --max-merge-gap 0 \
   --copy-id-scope local \
   --backend hal \
+  --hal-synteny-min-block-size 50000 \
+  --hal-synteny-max-anchor-distance 100000 \
   --resume
 ```
+
+This mode records one `halSynteny` result per leaf/direct-parent edge and then
+uses constrained `halLiftover` for reconciled internal blocks. The random
+direct-edge liftover audit described in `REAL_DATA_AUDIT.md` is an engineering
+preflight; the node statistics and merge diagnostics from this run are the
+biological fragmentation audit. Do not interpret either as evidence that
+halSynteny is transitive.
+
+Expected tree-wide files are `node_statistics.tsv`,
+`node_classifications.tsv`, and `merge_rejection_summary.tsv`. Leaf packages
+contain `blocks.tsv`, `node_occurrences.tsv`, `leaf_occurrences.tsv`,
+`parent_edge_runs.tsv`, `raw_halsynteny.psl`, `provenance.json`,
+`manifest.json`, and `summary.json`. Internal packages additionally contain
+the exact edge-run, atomic, provenance, conflict, merge-decision, and close
+unmerged tables.
 
 Compare final `nodes/<root>/` outputs with `hal-site-evaluator` by preserving
 block IDs, leaf occurrence IDs, HAL genome names, tree checksum, and node-map

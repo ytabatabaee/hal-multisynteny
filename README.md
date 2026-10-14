@@ -27,9 +27,9 @@ ancestor. It is reference-free with respect to extant genomes, but it depends
 on the selected HAL ancestor and on the quality and completeness of the input
 runs.
 
-The baseline is deliberately conservative: it does not yet merge adjacent
-atomic blocks, infer missing mappings, or distinguish biological absence from
-alignment failure.
+The baseline retains its conservative greedy adjacent-atom merge rule. It does
+not infer missing mappings or distinguish biological absence from alignment
+failure.
 
 ## Bottom-up node reconciliation
 
@@ -148,6 +148,26 @@ hal-multisynteny run-tree \
   --backend hal \
   --resume
 ```
+
+For the biological pilot, initialize leaves directly from the HAL with
+`halSynteny`; no `leaf_blocks.tsv` is required:
+
+```bash
+hal-multisynteny run-tree --hal Palaeognathae.hal --tree pilot.nwk \
+  --node-map node-map.tsv --leaf-init halsynteny --output-dir pilot-run \
+  --backend hal --min-block-length 50 --boundary-tolerance 1 \
+  --max-merge-gap 0 --hal-synteny-min-block-size 50000 \
+  --hal-synteny-max-anchor-distance 100000 --resume
+```
+
+Leaf edges use one recorded `halSynteny` run per leaf/direct-parent edge.
+Internal edges use constrained `halLiftover` mapping of already reconciled
+NodeBlocks. A rooted binary tree with `n` leaves has `2n-2` child-to-parent
+edges and `2n-1` nodes. The run records `node_statistics.tsv`,
+`node_classifications.tsv`, and `merge_rejection_summary.tsv`; each internal
+checkpoint records `merge_decisions.tsv` and `close_unmerged_pairs.tsv`.
+Leaf checkpoints contain `raw_halsynteny.psl`, `parent_edge_runs.tsv`, and
+`provenance.json`. halSynteny transitivity remains unproven.
 
 The runner parses a rooted binary guide tree, initializes supplied leaf seed
 blocks, maps each child node's own `NodeBlock` coordinates to its direct HAL

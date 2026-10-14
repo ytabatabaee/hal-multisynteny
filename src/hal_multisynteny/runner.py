@@ -9,10 +9,17 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from . import __version__
-from .extract import EdgeExtractor, FakeEdgeExtractor, HalEdgeExtractor
+from .extract import (
+    EdgeExtractionResult,
+    EdgeExtractor,
+    FakeEdgeExtractor,
+    HalEdgeExtractor,
+    HalSyntenyLeafInitializer,
+)
 from .hal import inspect_hal
 from .io import (
     LEAF_SEED_FIELDS,
+    read_edge_mapping_runs,
     read_leaf_occurrences,
     read_leaf_seed_blocks,
     read_node_blocks,
@@ -21,8 +28,10 @@ from .io import (
     write_conflicts,
     write_edge_mapping_runs,
     write_leaf_occurrences,
+    write_merge_decisions,
     write_node_blocks,
     write_node_occurrences,
+    write_node_statistics,
     write_parent_blocks,
     write_provenance,
     write_summary,
@@ -53,6 +62,7 @@ class NodePackage:
     node_occurrences: tuple[NodeBlockOccurrence, ...]
     leaf_occurrences: tuple[LeafOccurrence, ...]
     manifest: dict[str, object]
+    parent_edge_runs: tuple[EdgeMappingRun, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +75,10 @@ class RunTreeConfig:
     force_node: str | None = None
     dry_run: bool = False
     backend: str = "fake"
+    leaf_init: str = "supplied"
+    hal_synteny_min_block_size: int = 50
+    hal_synteny_max_anchor_distance: int = 1000
+    close_unmerged_threshold: int = 1000
     fake_mappings: str | None = None
     hal: str | None = None
 
@@ -81,14 +95,14 @@ def init_leaf_packages(
         "leaf_seed_sha256": sha256_file(Path(leaf_blocks) / "leaf_blocks.tsv"),
         "backend": "leaf-init",
     }
-    _init_leaf_packages_from_plan(plan, leaf_blocks, output_dir, False, identity)
+    _init_leaf_packages_from_plan(plan, leaf_blocks, output_dir, False, identity, RunTreeConfig(leaf_init="supplied"))
 
 
 def run_tree(
     *,
     tree_path: str | Path,
     node_map_path: str | Path,
-    leaf_blocks: str | Path,
+    leaf_blocks: str | Path | None,
     output_dir: str | Path,
     config: RunTreeConfig,
 ) -> dict[str, object]:
@@ -117,7 +131,7 @@ def run_tree(
         return plan_payload
 
     extractor = _build_extractor(config)
-    _init_leaf_packages_from_plan(plan, leaf_blocks, output, config.resume, identity)
+    _init_leaf_packages_from_plan(plan, leaf_blocks, output, config.resume, identity, config)
     packages = {
         node_id: load_package(nodes_dir / node_id, node_id, plan.node_to_hal[node_id])
         for node_id in plan.node_to_hal
@@ -141,19 +155,13 @@ def run_tree(
             packages[step.node_id] = load_package(node_path, step.node_id, step.hal_genome)
             reused.append(step.node_id)
             continue
-        left_result = extractor.extract(
-            child_node_id=step.left_child,
-            parent_node_id=step.node_id,
-            child_hal_genome=step.left_hal_genome,
-            parent_hal_genome=step.hal_genome,
-            child_blocks=left_package.blocks,
+        left_result = _extract_child_edge(
+            extractor, left_package, step.left_child, step.node_id, step.left_hal_genome,
+            step.hal_genome, left_package.blocks
         )
-        right_result = extractor.extract(
-            child_node_id=step.right_child,
-            parent_node_id=step.node_id,
-            child_hal_genome=step.right_hal_genome,
-            parent_hal_genome=step.hal_genome,
-            child_blocks=right_package.blocks,
+        right_result = _extract_child_edge(
+            extractor, right_package, step.right_child, step.node_id, step.right_hal_genome,
+            step.hal_genome, right_package.blocks
         )
         left_runs = [run.to_parent_mapped_run() for run in left_result.runs]
         right_runs = [run.to_parent_mapped_run() for run in right_result.runs]
@@ -214,6 +222,10 @@ def run_tree(
             result,
             identity,
         )
+        if result.statistics is not None:
+            result.statistics["left_unmapped_child_block_count"] = len(left_result.unmapped)
+            result.statistics["right_unmapped_child_block_count"] = len(right_result.unmapped)
+            result.statistics["leaf_occurrences_represented"] = len(leaf_occurrences)
         _write_internal_checkpoint(
             node_path,
             node_blocks,
@@ -225,6 +237,7 @@ def run_tree(
             left_result.unmapped,
             right_result.unmapped,
             manifest,
+            config.close_unmerged_threshold,
         )
         packages[step.node_id] = load_package(node_path, step.node_id, step.hal_genome)
         recomputed.append(step.node_id)
@@ -239,6 +252,7 @@ def run_tree(
             "hal_preflight": hal_info,
         },
     )
+    _write_tree_statistics(output, plan)
     return plan_payload
 
 
@@ -251,16 +265,30 @@ def load_package(path: str | Path, node_id: str, hal_genome: str) -> NodePackage
     leaf_occurrences = tuple(read_leaf_occurrences(package_path / "leaf_occurrences.tsv"))
     manifest = json.loads((package_path / "manifest.json").read_text(encoding="utf-8"))
     _validate_output_checksums(package_path, manifest)
-    return NodePackage(node_id, hal_genome, package_path, blocks, node_occurrences, leaf_occurrences, manifest)
+    edge_path = package_path / "parent_edge_runs.tsv"
+    edge_runs = tuple(read_edge_mapping_runs(edge_path)) if edge_path.exists() else ()
+    return NodePackage(node_id, hal_genome, package_path, blocks, node_occurrences, leaf_occurrences, manifest, edge_runs)
 
 
 def _init_leaf_packages_from_plan(
     plan: TraversalPlan,
-    leaf_blocks: str | Path,
+    leaf_blocks: str | Path | None,
     output_dir: str | Path,
     resume: bool,
     identity: dict[str, object],
+    config: RunTreeConfig,
 ) -> None:
+    if config.leaf_init not in {"supplied", "halsynteny"}:
+        raise CheckpointError("leaf_init must be supplied or halsynteny")
+    if config.leaf_init == "halsynteny":
+        if config.backend != "hal" or not config.hal:
+            raise CheckpointError("--leaf-init halsynteny requires --hal and --backend hal")
+        initializer = HalSyntenyLeafInitializer(config.hal, min_block_size=config.hal_synteny_min_block_size,
+                                                 max_anchor_distance=config.hal_synteny_max_anchor_distance)
+        _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializer, resume)
+        return
+    if leaf_blocks is None:
+        raise CheckpointError("--leaf-blocks is required with --leaf-init supplied")
     source = Path(leaf_blocks)
     rows = read_leaf_seed_blocks(source / "leaf_blocks.tsv")
     by_leaf: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -326,6 +354,54 @@ def _init_leaf_packages_from_plan(
             "warnings": [],
         }
         _write_leaf_checkpoint(path, tuple(blocks), tuple(node_occurrences), tuple(leaf_occurrences), manifest)
+
+
+def _extract_child_edge(extractor, package, child_node, parent_node, child_genome, parent_genome, blocks):
+    if package.parent_edge_runs and package.manifest.get("parent_node") == parent_node:
+        return EdgeExtractionResult(package.parent_edge_runs, (), "halSynteny-leaf",
+            {"halSynteny": package.manifest.get("tool_version", "recorded")}, (),
+            ("leaf checkpoint contains exact halSynteny fragment mappings",))
+    return extractor.extract(child_node_id=child_node, parent_node_id=parent_node, child_hal_genome=child_genome,
+                             parent_hal_genome=parent_genome, child_blocks=blocks)
+
+
+def _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializer, resume):
+    leaves = sorted({node_id for node_id in plan.node_to_hal if node_id not in {step.node_id for step in plan.steps}})
+    parent_by_child = {child: step for step in plan.steps for child in (step.left_child, step.right_child)}
+    for leaf in leaves:
+        step = parent_by_child[leaf]
+        path = Path(output_dir) / "nodes" / leaf
+        parameters = _leaf_parameters(plan, identity, leaf) | {"leaf_init": config.leaf_init,
+            "min_block_size": config.hal_synteny_min_block_size, "max_anchor_distance": config.hal_synteny_max_anchor_distance}
+        if path.joinpath("COMPLETE").exists() and resume and _can_reuse(path, parameters, {}, identity):
+            continue
+        result = initializer.initialize(leaf, step.node_id, plan.node_to_hal[leaf], step.hal_genome)
+        blocks = tuple(result.blocks)
+        node_occ = tuple(NodeBlockOccurrence(b.block_id, leaf, b.chrom, b.start, b.end,
+                           f"{b.block_id}.node", "1", b.mapping_status, b.block_id) for b in blocks)
+        leaf_occ = tuple(LeafOccurrence(b.block_id, f"{b.block_id}.leaf", leaf, b.chrom, b.start, b.end, "+", "1",
+                           b.mapping_status, "halSynteny", leaf, b.chrom, b.start, b.end) for b in blocks)
+        manifest = {"version": __version__, "schema_version": "0.3.1", "node_id": leaf,
+                    "hal_genome": plan.node_to_hal[leaf], "parent_node": step.node_id, "kind": "leaf",
+                    "tree_sha256": plan.tree_sha256, "node_map_sha256": plan.node_map_sha256,
+                    "parameters": parameters, "run_identity": identity, "tool_version": result.tool_versions.get("halSynteny", "unknown"),
+                    "hal_sha256": initializer.hal_checksum, "command": list(result.command),
+                    "stdout": result.stdout, "stderr": result.stderr,
+                    "warnings": ["halSynteny transitivity has not been established"]}
+        leaf_summary = {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occ), "initializer": "halsynteny"}
+        leaf_provenance = {"command": result.command, "stdout": result.stdout, "stderr": result.stderr,
+            "hal_sha256": initializer.hal_checksum, "tree_sha256": plan.tree_sha256,
+            "node_map_sha256": plan.node_map_sha256, "query_genome": plan.node_to_hal[leaf],
+            "target_genome": step.hal_genome}
+        _write_checkpoint_files(path, {
+            "blocks.tsv": lambda p, value=blocks: write_node_blocks(p, value),
+            "node_occurrences.tsv": lambda p, value=node_occ: write_node_occurrences(p, value),
+            "leaf_occurrences.tsv": lambda p, value=leaf_occ: write_leaf_occurrences(p, value),
+            "parent_edge_runs.tsv": lambda p, value=result.runs: write_edge_mapping_runs(p, value),
+            "raw_halsynteny.psl": lambda p, value=result.raw_psl: p.write_text(value, encoding="utf-8"),
+            "provenance.json": lambda p, value=leaf_provenance: p.write_text(json.dumps(value, sort_keys=True, indent=2) + "\n", encoding="utf-8"),
+            "summary.json": lambda p, value=leaf_summary: write_summary(p, value),
+        }, manifest)
 
 
 def _propagate_leaf_occurrences(
@@ -437,6 +513,7 @@ def _write_internal_checkpoint(
     left_unmapped: tuple[UnmappedEdgeEvidence, ...],
     right_unmapped: tuple[UnmappedEdgeEvidence, ...],
     manifest: dict[str, object],
+    close_unmerged_threshold: int = 1000,
 ) -> None:
     _write_checkpoint_files(path, {
         "blocks.tsv": lambda p: write_node_blocks(p, blocks),
@@ -446,11 +523,15 @@ def _write_internal_checkpoint(
         "atomic_intervals.tsv": lambda p: write_atomic_intervals(p, result.atomic_intervals),
         "provenance.tsv": lambda p: write_provenance(p, result.provenance),
         "conflicts.tsv": lambda p: write_conflicts(p, result.conflicts),
+        "merge_decisions.tsv": lambda p: write_merge_decisions(p, result.merge_decisions),
+        "close_unmerged_pairs.tsv": lambda p: write_merge_decisions(
+            p, tuple(d for d in result.merge_decisions if not d.can_merge and d.parent_gap <= close_unmerged_threshold)
+        ),
         "left_edge_runs.tsv": lambda p: write_edge_mapping_runs(p, left_runs),
         "right_edge_runs.tsv": lambda p: write_edge_mapping_runs(p, right_runs),
         "left_unmapped_edge_evidence.tsv": lambda p: write_unmapped_edge_evidence(p, left_unmapped),
         "right_unmapped_edge_evidence.tsv": lambda p: write_unmapped_edge_evidence(p, right_unmapped),
-        "summary.json": lambda p: write_summary(p, {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occurrences), "conflicts": len(result.conflicts), "unmapped_edge_evidence": len(left_unmapped) + len(right_unmapped)}),
+        "summary.json": lambda p: write_summary(p, {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occurrences), "conflicts": len(result.conflicts), "unmapped_edge_evidence": len(left_unmapped) + len(right_unmapped), "node_statistics": result.statistics or {}, "merge_rejection_counts": (result.statistics or {}).get("merge_rejection_counts", {})}),
     }, manifest)
 
 
@@ -534,7 +615,7 @@ def _run_identity(
         "schema_version": "0.3.1",
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
-        "leaf_seed_sha256": sha256_file(leaf_seed) if leaf_seed.exists() else "",
+        "leaf_seed_sha256": sha256_file(leaf_seed) if leaf_blocks and leaf_seed.exists() else "",
         "backend": config.backend,
         "fake_mapping_sha256": sha256_file(config.fake_mappings) if config.fake_mappings else "",
     }
@@ -573,6 +654,10 @@ def _parameters(config: RunTreeConfig, plan: TraversalPlan, identity: dict[str, 
         "boundary_tolerance": config.boundary_tolerance,
         "max_merge_gap": config.max_merge_gap,
         "copy_id_scope": config.copy_id_scope,
+        "leaf_init": config.leaf_init,
+        "hal_synteny_min_block_size": config.hal_synteny_min_block_size,
+        "hal_synteny_max_anchor_distance": config.hal_synteny_max_anchor_distance,
+        "close_unmerged_threshold": config.close_unmerged_threshold,
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
         "version": __version__,
@@ -644,3 +729,24 @@ def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp.replace(path)
+
+
+def _write_tree_statistics(output: Path, plan: TraversalPlan) -> None:
+    rows = []
+    class_rows = []
+    rejection_rows = []
+    for step in plan.steps:
+        summary_path = output / "nodes" / step.node_id / "summary.json"
+        if not summary_path.exists():
+            continue
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        stats = dict(summary.get("node_statistics", {})); stats["node"] = step.node_id
+        rows.append(stats)
+        for classification, count in sorted(stats.get("classification_counts", {}).items()):
+            class_rows.append({"node": step.node_id, "classification": classification, "count": count,
+                               "covered_bp": stats.get("classification_bp", {}).get(classification, 0)})
+        for reason, count in sorted(stats.get("merge_rejection_counts", {}).items()):
+            rejection_rows.append({"node": step.node_id, "reason": reason, "count": count})
+    write_node_statistics(output / "node_statistics.tsv", rows)
+    write_node_statistics(output / "node_classifications.tsv", class_rows)
+    write_node_statistics(output / "merge_rejection_summary.tsv", rejection_rows)

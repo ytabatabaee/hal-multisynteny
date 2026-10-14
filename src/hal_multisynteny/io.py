@@ -23,6 +23,7 @@ from .models import (
 from .reconcile import (
     AtomicInterval,
     ConflictRecord,
+    MergeDecision,
     ParentBlock,
     ProvenanceRecord,
     ReconciledOccurrence,
@@ -511,3 +512,17 @@ def write_unmapped_edge_evidence(
     path: str | Path, records: Iterable[UnmappedEdgeEvidence]
 ) -> None:
     _write_dataclasses(path, records, list(UNMAPPED_EDGE_FIELDS))
+
+
+def write_merge_decisions(path: str | Path, records: Iterable[MergeDecision]) -> None:
+    _write_dataclasses(path, records, list(MergeDecision.__dataclass_fields__))
+
+
+def write_node_statistics(path: str | Path, rows: Iterable[dict[str, object]]) -> None:
+    materialized = list(rows)
+    fields = sorted({key for row in materialized for key in row})
+    with Path(path).open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        for row in materialized:
+            writer.writerow({field: json.dumps(row.get(field), sort_keys=True) if isinstance(row.get(field), (dict, list)) else row.get(field, "") for field in fields})

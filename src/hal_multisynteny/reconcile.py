@@ -136,6 +136,22 @@ class ConflictRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class MergeDecision:
+    parent_node: str
+    parent_chrom: str
+    left_start: int
+    left_end: int
+    right_start: int
+    right_end: int
+    can_merge: bool
+    accepted_reason: str
+    rejection_reasons: tuple[str, ...]
+    parent_gap: int
+    left_child_gaps: str
+    right_child_gaps: str
+
+
+@dataclass(frozen=True, slots=True)
 class ReconcileResult:
     blocks: tuple[ParentBlock, ...]
     occurrences: tuple[ReconciledOccurrence, ...]
@@ -146,6 +162,8 @@ class ReconcileResult:
     splits: int
     merges: int
     warnings: tuple[str, ...]
+    merge_decisions: tuple[MergeDecision, ...] = ()
+    statistics: dict[str, object] | None = None
 
 
 @dataclass(slots=True)
@@ -454,22 +472,39 @@ def _membership(atom: _Atom) -> tuple[object, ...]:
     return atom.classification, signature(atom.left), signature(atom.right)
 
 
-def _can_merge(previous: _Atom, current: _Atom, config: ReconcileConfig) -> bool:
-    if previous.chrom != current.chrom or current.start - previous.end > config.max_merge_gap:
-        return False
+def merge_decision(previous: _Atom, current: _Atom, config: ReconcileConfig, parent_node: str = "") -> MergeDecision:
+    reasons: list[str] = []
+    gap = current.start - previous.end
+    if previous.chrom != current.chrom:
+        reasons.append("different_parent_chromosome")
+    if gap > config.max_merge_gap:
+        reasons.append("parent_gap_exceeds_threshold")
+    if reasons:
+        return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
+                             False, "", tuple(reasons), gap, _child_gap_text(previous, current, "left"), _child_gap_text(previous, current, "right"))
     if _membership(previous) == _membership(current):
         # Exact record membership makes descendant projections collinear and monotonic.
-        return all(
+        ok = all(
             record.parent_start <= previous.start and record.parent_end >= current.end
             for record in previous.left + previous.right
         )
+        return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
+                             ok, "merge_compatible" if ok else "intervening_filtered_atom", () if ok else ("intervening_filtered_atom",),
+                             gap, _child_gap_text(previous, current, "left"), _child_gap_text(previous, current, "right"))
     if (
         previous.classification != current.classification
         or current.start != previous.end
         or min(previous.end - previous.start, current.end - current.start)
         > config.boundary_tolerance
     ):
-        return False
+        if previous.classification != current.classification:
+            reasons.append("different_classification")
+        if current.start != previous.end:
+            reasons.append("intervening_filtered_atom")
+        if min(previous.end - previous.start, current.end - current.start) > config.boundary_tolerance:
+            reasons.append("boundary_atom_exceeds_tolerance")
+        return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
+                             False, "", tuple(reasons), gap, _child_gap_text(previous, current, "left"), _child_gap_text(previous, current, "right"))
 
     def side_is_collinear(
         before: tuple[ParentMappedRun, ...], after: tuple[ParentMappedRun, ...]
@@ -499,9 +534,31 @@ def _can_merge(previous: _Atom, current: _Atom, config: ReconcileConfig) -> bool
                 return False
         return True
 
-    return side_is_collinear(previous.left, current.left) and side_is_collinear(
-        previous.right, current.right
-    )
+    left_ok = side_is_collinear(previous.left, current.left)
+    right_ok = side_is_collinear(previous.right, current.right)
+    if not left_ok:
+        reasons.append("non_collinear_forward" if any(r.strand == "+" for r in previous.left + current.left) else "non_collinear_reverse")
+    if not right_ok:
+        reasons.append("non_collinear_forward" if any(r.strand == "+" for r in previous.right + current.right) else "non_collinear_reverse")
+    ok = left_ok and right_ok
+    return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
+                         ok, "merge_compatible" if ok else "", tuple(dict.fromkeys(reasons)), gap,
+                         _child_gap_text(previous, current, "left"), _child_gap_text(previous, current, "right"))
+
+
+def _child_gap_text(previous: _Atom, current: _Atom, side: str) -> str:
+    before = previous.left if side == "left" else previous.right
+    after = current.left if side == "left" else current.right
+    values = []
+    for first in before:
+        for second in after:
+            if first.chrom == second.chrom and first.strand == second.strand:
+                values.append(str(abs(second.start - first.end) if first.strand == "+" else abs(first.start - second.end)))
+    return ",".join(sorted(set(values)))
+
+
+def _can_merge(previous: _Atom, current: _Atom, config: ReconcileConfig) -> bool:
+    return merge_decision(previous, current, config).can_merge
 
 
 def _mapping_quality(records: Iterable[ParentMappedRun]) -> str:
@@ -692,13 +749,26 @@ def reconcile_node(
         )
 
     groups: list[list[_Atom]] = []
+    decisions: list[MergeDecision] = []
     hit_barrier = False
     for atom in atoms:
         if not atom.retained:
             hit_barrier = True
             continue
-        if groups and not hit_barrier and _can_merge(groups[-1][-1], atom, config):
-            groups[-1].append(atom)
+        if groups and hit_barrier:
+            previous = groups[-1][-1]
+            base = merge_decision(previous, atom, config, parent_node)
+            decisions.append(MergeDecision(base.parent_node, base.parent_chrom, base.left_start, base.left_end,
+                base.right_start, base.right_end, False, "", tuple(dict.fromkeys(base.rejection_reasons + ("intervening_filtered_atom",))),
+                base.parent_gap, base.left_child_gaps, base.right_child_gaps))
+            groups.append([atom])
+        elif groups:
+            decision = merge_decision(groups[-1][-1], atom, config, parent_node)
+            decisions.append(decision)
+            if decision.can_merge:
+                groups[-1].append(atom)
+            else:
+                groups.append([atom])
         else:
             groups.append([atom])
         hit_barrier = False
@@ -783,7 +853,8 @@ def reconcile_node(
                 if not atom.retained
                 else "identical evidence; collinear monotonic projections"
                 if merged
-                else "not_merged",
+                else next((d.rejection_reasons[0] if d.rejection_reasons else d.accepted_reason
+                           for d in decisions if d.right_start == atom.start and d.left_end == atom.start), "not_merged"),
                 atom.block_id,
             )
         )
@@ -823,7 +894,33 @@ def reconcile_node(
             "boundary tolerance is used only when evaluating near-boundary compatibility; "
             "the exact atomic partition is unchanged"
         ),
+        "halSynteny transitivity has not been established; this run records provenance only",
     )
+    classification_counts = {name: sum(1 for atom in atoms if atom.classification == name) for name in CLASSIFICATIONS}
+    classification_bp = {name: sum(atom.end - atom.start for atom in atoms if atom.classification == name) for name in CLASSIFICATIONS}
+    retained = sum(atom.retained for atom in atoms)
+    mapped_blocks = len({(run.child_node, run.child_block_id) for run in all_runs})
+    statistics = {
+        "left_input_block_count": len({run.child_block_id for run in left_runs}),
+        "right_input_block_count": len({run.child_block_id for run in right_runs}),
+        "left_mapped_child_block_count": len({run.child_block_id for run in left_runs}),
+        "right_mapped_child_block_count": len({run.child_block_id for run in right_runs}),
+        "left_mapping_run_count": len(left_runs), "right_mapping_run_count": len(right_runs),
+        "left_unmapped_child_block_count": 0, "right_unmapped_child_block_count": 0,
+        "distinct_input_boundaries": len({point for run in all_runs for point in (run.parent_start, run.parent_end)}),
+        "covered_atomic_intervals": len(atoms), "below_minimum_length_atoms": sum(not a.retained for a in atoms),
+        "retained_atoms_before_merging": retained, "final_parent_blocks": len(blocks),
+        "accepted_pairwise_merges": sum(d.can_merge for d in decisions),
+        "compression_ratio": len(blocks) / retained if retained else 0.0,
+        "fragmentation_expansion": retained / mapped_blocks if mapped_blocks else 0.0,
+        "classification_counts": classification_counts, "classification_bp": classification_bp,
+        "unique_mappings": sum(run.status == "unique" for run in all_runs),
+        "duplicated_mappings": sum(run.status == "duplicated" for run in all_runs),
+        "ambiguous_mappings": sum(run.status == "ambiguous" for run in all_runs),
+        "unaligned_mappings": sum(run.status == "unaligned" for run in all_runs),
+        "leaf_occurrences_represented": len(occurrences),
+        "merge_rejection_counts": {reason: sum(reason in d.rejection_reasons for d in decisions) for reason in sorted({r for d in decisions for r in d.rejection_reasons})},
+    }
     return ReconcileResult(
         tuple(blocks),
         tuple(occurrences),
@@ -837,6 +934,8 @@ def reconcile_node(
         split_records,
         sum(max(0, len(group) - 1) for group in groups),
         warnings,
+        tuple(decisions),
+        statistics,
     )
 
 

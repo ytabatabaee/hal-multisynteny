@@ -29,13 +29,24 @@ Tests deliberately use different logical and HAL names to verify this boundary.
 The workflow is:
 
 1. parse a rooted binary Newick tree and node map;
-2. initialize leaf checkpoints from supplied seed blocks;
+2. initialize leaf checkpoints from supplied seed blocks or direct `halSynteny`;
 3. process internal nodes in postorder;
 4. extract each child package's `NodeBlock` intervals to the parent;
 5. adapt `EdgeMappingRun` rows to the v0.2 parent-mapped reconciliation schema;
 6. reconcile siblings;
 7. write an atomic node checkpoint with node blocks, leaf occurrences,
-   provenance, conflicts, edge runs, and a manifest.
+   provenance, conflicts, merge decisions, edge runs, and a manifest.
+
+With `--leaf-init halsynteny`, every leaf is run once against its validated
+direct HAL parent. PSL chains become deterministic query-side NodeBlocks plus
+exact fragment-level edge runs, including duplicate alternatives and raw PSL
+provenance. Internal edges continue to use constrained `halLiftover` mapping
+of reconciled NodeBlocks. For `n` leaves there are `2n-2` child-to-parent edges
+and `2n-1` nodes. The greedy merge rule is deliberately unchanged for this
+pilot. Tree-wide postorder outputs are `node_statistics.tsv`,
+`node_classifications.tsv`, and `merge_rejection_summary.tsv`; internal
+checkpoints also contain `merge_decisions.tsv` and
+`close_unmerged_pairs.tsv`. halSynteny transitivity remains unproven.
 
 For the real HAL backend, extraction preflight runs before any node checkpoint is
 written or replaced. It verifies that every mapped HAL genome exists and that

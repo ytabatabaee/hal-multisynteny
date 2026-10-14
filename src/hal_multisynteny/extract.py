@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import shutil
 import subprocess
@@ -18,6 +19,138 @@ from .utils import sha256_file
 
 class ExtractionError(RuntimeError):
     """Raised when edge extraction cannot produce strict parent-mapped runs."""
+
+
+@dataclass(frozen=True, slots=True)
+class HalSyntenyLeafResult:
+    blocks: tuple[NodeBlock, ...]
+    node_occurrences: tuple[tuple[str, str, str, int, int, str, str, str], ...]
+    leaf_occurrences: tuple[tuple[str, str, str, int, int, str, str, str], ...]
+    runs: tuple[EdgeMappingRun, ...]
+    raw_psl: str
+    command: tuple[str, ...]
+    stdout: str
+    stderr: str
+    tool_versions: dict[str, str]
+
+
+def build_halsynteny_command(
+    executable: str, hal_path: str | Path, output: str | Path, query_genome: str,
+    target_genome: str, min_block_size: int, max_anchor_distance: int,
+    help_text: str = "",
+) -> tuple[str, ...]:
+    """Build the official halSynteny CLI command in one isolated function."""
+    flags = set(help_text.split())
+    command = [executable, str(hal_path), str(output), "--queryGenome", query_genome,
+               "--targetGenome", target_genome]
+    if help_text and "--minBlockSize" not in flags:
+        raise ExtractionError("installed halSynteny does not advertise --minBlockSize")
+    if help_text and "--maxAnchorDistance" not in flags:
+        raise ExtractionError("installed halSynteny does not advertise --maxAnchorDistance")
+    command.extend(["--minBlockSize", str(min_block_size), "--maxAnchorDistance", str(max_anchor_distance)])
+    return tuple(command)
+
+
+def parse_halsynteny_psl(
+    text: str, *, child_node: str, parent_node: str, query_genome: str,
+    target_genome: str, command: tuple[str, ...],
+) -> tuple[NodeBlock, ...] | tuple[tuple[NodeBlock, ...], tuple[EdgeMappingRun, ...]]:
+    """Strictly parse PSL and return deterministic query chains and fragment runs."""
+    rows: list[tuple[tuple[str, ...], list[EdgeMappingRun]]] = []
+    for line_number, raw in enumerate(text.splitlines(), start=1):
+        if not raw.strip() or raw.startswith(("psLayout", "match")):
+            continue
+        fields = raw.rstrip("\n").split("\t")
+        if len(fields) != 21:
+            raise ExtractionError(f"halSynteny PSL line {line_number}: expected 21 columns")
+        try:
+            ints = [int(fields[i]) for i in range(8)] + [int(fields[i]) for i in (10, 11, 12, 14, 15, 16, 17)]
+            matches, mismatches, rep, ncount, qins, qbases, tins, tbases, qsize, qstart, qend, tsize, tstart, tend, block_count = ints
+            if min(matches, mismatches, rep, ncount, qins, qbases, tins, tbases) < 0:
+                raise ValueError("negative PSL count")
+            sizes = [int(x) for x in fields[18].rstrip(",").split(",") if x]
+            qstarts = [int(x) for x in fields[19].rstrip(",").split(",") if x]
+            tstarts = [int(x) for x in fields[20].rstrip(",").split(",") if x]
+        except (ValueError, IndexError) as exc:
+            raise ExtractionError(f"malformed halSynteny PSL at line {line_number}: {exc}") from exc
+        if block_count <= 0 or len(sizes) != block_count or len(qstarts) != block_count or len(tstarts) != block_count:
+            raise ExtractionError(f"halSynteny PSL line {line_number}: block arrays disagree with blockCount")
+        if any(size <= 0 or q < 0 or t < 0 for size, q, t in zip(sizes, qstarts, tstarts, strict=True)):
+            raise ExtractionError(f"halSynteny PSL line {line_number}: invalid block array value")
+        strand = fields[8]
+        if strand not in {"+", "-", "+-", "-+", "++", "--"}:
+            raise ExtractionError(f"halSynteny PSL line {line_number}: unsupported strand {strand!r}")
+        if fields[9] != query_genome and fields[9] == "":
+            raise ExtractionError(f"halSynteny PSL line {line_number}: empty query name")
+        if fields[13] != target_genome and fields[13] == "":
+            raise ExtractionError(f"halSynteny PSL line {line_number}: empty target name")
+        if not (0 <= qstart <= qend <= qsize and 0 <= tstart <= tend <= tsize):
+            raise ExtractionError(f"halSynteny PSL line {line_number}: enclosing coordinates out of range")
+        qstrand, tstrand = strand[0], strand[1] if len(strand) == 2 else "+"
+        runs: list[EdgeMappingRun] = []
+        canonical_blocks: list[str] = []
+        for size, qraw, traw in zip(sizes, qstarts, tstarts, strict=True):
+            q0, q1 = (qsize - qraw - size, qsize - qraw) if qstrand == "-" else (qraw, qraw + size)
+            t0, t1 = (tsize - traw - size, tsize - traw) if tstrand == "-" else (traw, traw + size)
+            if q1 > qsize or t1 > tsize or q1 <= q0 or t1 <= t0:
+                raise ExtractionError(f"halSynteny PSL line {line_number}: block outside sequence bounds")
+            canonical_blocks.append(f"{size}:{q0}:{q1}:{t0}:{t1}")
+        fingerprint = hashlib.sha256(("|".join(fields)).encode()).hexdigest()[:16]
+        block_id = f"HSB_{fingerprint}"
+        occurrence_id = f"{block_id}.occurrence"
+        for component, (size, qraw, traw) in enumerate(zip(sizes, qstarts, tstarts, strict=True), start=1):
+            q0, q1 = (qsize - qraw - size, qsize - qraw) if qstrand == "-" else (qraw, qraw + size)
+            t0, t1 = (tsize - traw - size, tsize - traw) if tstrand == "-" else (traw, traw + size)
+            runs.append(EdgeMappingRun(child_node, block_id, occurrence_id, fields[9], q0, q1,
+                parent_node, fields[13], t0, t1, "+" if qstrand == tstrand else "-",
+                "1", "unique", f"{block_id}:fragment:{component:06d}", "halSynteny", json.dumps(command)))
+        rows.append((tuple(fields), runs))
+    rows.sort(key=lambda row: row[0])
+    blocks: list[NodeBlock] = []
+    all_runs: list[EdgeMappingRun] = []
+    duplicate_counts: dict[str, int] = {}
+    for _fields, original_runs in rows:
+        base_id = original_runs[0].child_block_id
+        duplicate_counts[base_id] = duplicate_counts.get(base_id, 0) + 1
+        ordinal = duplicate_counts[base_id]
+        block_id = base_id if ordinal == 1 else f"{base_id}_dup{ordinal:04d}"
+        runs = tuple(EdgeMappingRun(r.child_node, block_id, f"{block_id}.occurrence", r.child_chrom, r.child_start,
+            r.child_end, r.parent_node, r.parent_chrom, r.parent_start, r.parent_end, r.strand, r.copy_id,
+            "duplicated" if duplicate_counts[base_id] > 1 else r.status, r.source_anchor_id, r.tool, r.command) for r in original_runs)
+        first, last = min(runs, key=lambda r: r.child_start), max(runs, key=lambda r: r.child_end)
+        blocks.append(NodeBlock(first.child_block_id, child_node, first.child_chrom, first.child_start,
+                                last.child_end, "halsynteny_chain", "unique"))
+        all_runs.extend(runs)
+    return tuple(blocks), tuple(all_runs)
+
+
+class HalSyntenyLeafInitializer:
+    """Run halSynteny once for one leaf/direct-parent edge."""
+
+    def __init__(self, hal_path: str | Path, *, min_block_size: int = 50, max_anchor_distance: int = 1000,
+                 executable: str | None = None) -> None:
+        self.hal_path = Path(hal_path)
+        if not self.hal_path.is_file():
+            raise ExtractionError(f"HAL file does not exist: {self.hal_path}")
+        self.executable = executable or shutil.which("halSynteny")
+        if not self.executable:
+            raise ExtractionError("missing HAL tool: halSynteny is not on PATH")
+        self.min_block_size = min_block_size
+        self.max_anchor_distance = max_anchor_distance
+        self.hal_checksum = sha256_file(self.hal_path)
+
+    def initialize(self, child_node: str, parent_node: str, query_genome: str, target_genome: str) -> HalSyntenyLeafResult:
+        help_run = subprocess.run((self.executable, "--help"), check=False, capture_output=True, text=True)
+        command = build_halsynteny_command(self.executable, self.hal_path, "/dev/stdout", query_genome, target_genome,
+                                           self.min_block_size, self.max_anchor_distance, help_run.stdout + help_run.stderr)
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        if completed.returncode:
+            raise ExtractionError(f"halSynteny failed with exit {completed.returncode}: {completed.stderr.strip()}")
+        raw = completed.stdout
+        blocks, runs = parse_halsynteny_psl(raw, child_node=child_node, parent_node=parent_node,
+                                           query_genome=query_genome, target_genome=target_genome, command=command)
+        return HalSyntenyLeafResult(blocks, (), (), runs, raw, command, completed.stdout, completed.stderr,
+                                    {"halSynteny": _probe_version(self.executable)})
 
 
 @dataclass(frozen=True, slots=True)
