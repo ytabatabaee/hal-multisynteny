@@ -513,7 +513,11 @@ def write_fake_hal_tools(bin_dir: Path, *, tree_text: str, genomes: str) -> None
         "if '--version' in sys.argv:\n"
         "    print('fake-halLiftover 1.0')\n"
         "else:\n"
-        "    open(sys.argv[-1], 'w', encoding='utf-8').close()\n",
+        "    inp, out = sys.argv[3], sys.argv[5]\n"
+        "    with open(inp, encoding='utf-8') as ih, open(out, 'w', encoding='utf-8') as oh:\n"
+        "        for line in ih:\n"
+        "            chrom, start, end, name, score, strand = line.rstrip('\\n').split('\\t')[:6]\n"
+        "            oh.write('\\t'.join(['chr1', start, end, name, score, '+']) + '\\n')\n",
         encoding="utf-8",
     )
     os.chmod(stats, 0o755)
@@ -570,13 +574,18 @@ def test_halsynteny_leaf_init_without_leaf_blocks_runs_api_and_cli(tmp_path, mon
         genomes="HAL_A HAL_B HAL_C HAL_D HAL_N1 HAL_N2 HAL_ROOT",
     )
     synteny = tools / "halSynteny"
+    counter = tmp_path / "halsynteny-count"
     synteny.write_text(
         "#!/usr/bin/env python3\n"
         "import sys\n"
         "if '--help' in sys.argv:\n"
         "    print('--minBlockSize --maxAnchorDistance')\n"
         "    raise SystemExit(0)\n"
-        "print('100\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t+\\tchr1\\t1000\\t0\\t100\\tchr1\\t1000\\t0\\t100\\t1\\t100,\\t0,\\t0,')\n",
+        "if '--version' in sys.argv:\n"
+        "    print('fake-halSynteny 1.0')\n"
+        "    raise SystemExit(0)\n"
+        f"open({str(counter)!r}, 'a', encoding='utf-8').write('run\\n')\n"
+        "print('200\\t0\\t0\\t0\\t1\\t10\\t1\\t10\\t+\\tchr1\\t1000\\t0\\t210\\tchr1\\t1000\\t0\\t210\\t2\\t100,100,\\t0,110,\\t0,110,')\n",
         encoding="utf-8",
     )
     os.chmod(synteny, 0o755)
@@ -592,6 +601,23 @@ def test_halsynteny_leaf_init_without_leaf_blocks_runs_api_and_cli(tmp_path, mon
     n1_summary = json.loads((api_output / "nodes" / "n1" / "summary.json").read_text(encoding="utf-8"))
     assert n1_summary["node_statistics"]["left_input_block_count"] == 1
     assert n1_summary["node_statistics"]["left_mapping_occurrence_count"] == 1
+    assert n1_summary["node_statistics"]["covered_atomic_intervals"] == 2
+    assert n1_summary["node_statistics"]["retained_atoms_before_merging"] == 2
+    assert n1_summary["node_statistics"]["final_parent_blocks"] == 2
+    root_summary = json.loads((api_output / "nodes" / "root" / "summary.json").read_text(encoding="utf-8"))
+    root_occurrences = read_leaf_occurrences(api_output / "nodes" / "root" / "leaf_occurrences.tsv")
+    assert (api_output / "nodes" / "root" / "blocks.tsv").read_text(encoding="utf-8").count("\n") > 1
+    assert {row.leaf for row in root_occurrences} == {"A", "B", "C", "D"}
+    assert len(root_occurrences) == 8
+    assert root_summary["node_statistics"]["distinct_input_boundaries"] == 4
+    assert root_summary["node_statistics"]["covered_atomic_intervals"] == 2
+    assert root_summary["node_statistics"]["retained_atoms_before_merging"] == 2
+    assert root_summary["node_statistics"]["final_parent_blocks"] == 2
+    assert root_summary["node_statistics"]["left_mapping_run_count"] == 2
+    assert root_summary["node_statistics"]["right_mapping_run_count"] == 2
+    assert (api_output / "nodes" / "n1" / "merge_decisions.tsv").read_text(encoding="utf-8").count("\n") > 1
+    assert (api_output / "merge_rejection_summary.tsv").read_text(encoding="utf-8").count("\n") > 1
+    assert (api_output / "node_classifications.tsv").read_text(encoding="utf-8").count("\n") > 1
     load_package(api_output / "nodes" / "n1", "n1", "HAL_N1")
     first_statistics = (api_output / "node_statistics.tsv").read_bytes()
     run_tree(
@@ -599,6 +625,7 @@ def test_halsynteny_leaf_init_without_leaf_blocks_runs_api_and_cli(tmp_path, mon
         config=RunTreeConfig(backend="hal", hal=str(hal), leaf_init="halsynteny", min_block_length=1, resume=True),
     )
     assert (api_output / "node_statistics.tsv").read_bytes() == first_statistics
+    assert counter.read_text(encoding="utf-8").splitlines() == ["run"] * 4
     synteny.write_text(synteny.read_text(encoding="utf-8").replace("chr1", "chr2"), encoding="utf-8")
     with pytest.raises(CheckpointError, match="stale checkpoint"):
         run_tree(

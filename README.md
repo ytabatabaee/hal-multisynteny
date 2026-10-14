@@ -5,7 +5,7 @@ shared multi-genome synteny-block alphabet from Cactus/HAL homology mappings.
 It is intended for rearrangement phylogeny and comparative-genomics research in
 which pairwise blocks are insufficient.
 
-> **Status:** research prototype. Version 0.3.1 provides the first checkpointed,
+> **Status:** research prototype. Version 0.4.0 provides the first checkpointed,
 > bottom-up, HAL-backed pilot runner. It is intended for small bird or fish clade
 > experiments, not VGP-scale production analysis, and should not be described as
 > a finished replacement for MAF2Synteny.
@@ -167,7 +167,11 @@ edges and `2n-1` nodes. The run records `node_statistics.tsv`,
 `node_classifications.tsv`, and `merge_rejection_summary.tsv`; each internal
 checkpoint records `merge_decisions.tsv` and `close_unmerged_pairs.tsv`.
 Leaf checkpoints contain `raw_halsynteny.psl`, `parent_edge_runs.tsv`, and
-`provenance.json`. halSynteny transitivity remains unproven.
+`provenance.json`. Conflict-classified atoms are never merged. Random direct-edge
+liftover auditing is an engineering preflight separate from the biological
+fragmentation audit. Resume validates and reuses complete leaf halSynteny
+checkpoints without rerunning the tool. halSynteny transitivity remains
+unproven.
 
 Exact query-side chains share one logical block family. Distinct target mappings
 are retained as duplicated local alternatives. Partially overlapping query

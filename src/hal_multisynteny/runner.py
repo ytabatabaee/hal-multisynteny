@@ -374,8 +374,14 @@ def _update_node_statistics(result, left_package, right_package, left_result, ri
     for side, package, extraction in sides:
         input_blocks = {block.block_id for block in package.blocks}
         mapped_blocks = {run.child_block_id for run in extraction.runs}
-        unmapped_blocks = input_blocks - mapped_blocks
-        if mapped_blocks | unmapped_blocks != input_blocks:
+        unmapped_evidence_blocks = {evidence.child_block_id for evidence in extraction.unmapped}
+        expected_unmapped_blocks = input_blocks - mapped_blocks
+        if unmapped_evidence_blocks != expected_unmapped_blocks:
+            raise CheckpointError(
+                f"{side} unmapped evidence does not match input minus mapped child blocks"
+            )
+        unmapped_blocks = expected_unmapped_blocks
+        if mapped_blocks | unmapped_blocks != input_blocks or mapped_blocks & unmapped_blocks:
             raise CheckpointError(f"{side} mapped/unmapped child blocks do not cover input blocks")
         occurrences = {(run.child_block_id, run.child_occurrence_id, run.copy_id) for run in extraction.runs}
         status_by_occurrence = {}
@@ -390,6 +396,8 @@ def _update_node_statistics(result, left_package, right_package, left_result, ri
             status: sum(value == status for value in status_by_occurrence.values())
             for status in ("unique", "duplicated", "ambiguous", "unaligned")
         }
+        result.statistics[f"{side}_mapping_status_counts"]["unaligned"] += len(unmapped_evidence_blocks)
+        result.statistics[f"{side}_unmapped_evidence_count"] = len(unmapped_evidence_blocks)
     result.statistics["leaf_occurrences_represented"] = len(leaf_occurrences)
     result.statistics["mapping_status_denominator"] = (
         result.statistics["left_mapping_occurrence_count"] + result.statistics["right_mapping_occurrence_count"]
@@ -417,9 +425,20 @@ def _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializ
     for leaf in leaves:
         step = parent_by_child[leaf]
         path = Path(output_dir) / "nodes" / leaf
+        existing_manifest = path / "manifest.json"
+        if resume and path.joinpath("COMPLETE").exists() and existing_manifest.exists():
+            stored = json.loads(existing_manifest.read_text(encoding="utf-8"))
+            initializer.executable_version = str(stored.get("halsynteny_version", ""))
+        else:
+            initializer.probe_version()
         base_parameters = _leaf_parameters(plan, identity, leaf) | {"leaf_init": config.leaf_init,
             "min_block_size": config.hal_synteny_min_block_size, "max_anchor_distance": config.hal_synteny_max_anchor_distance,
-            "halsynteny_executable": initializer.executable, "halsynteny_version": initializer.executable_version}
+            "halsynteny_executable": initializer.executable, "halsynteny_version": initializer.executable_version,
+            "halsynteny_executable_sha256": initializer.executable_sha256}
+        if path.joinpath("COMPLETE").exists() and resume and _can_reuse_halsynteny_leaf(
+            path, base_parameters, identity, initializer, plan.node_to_hal[leaf], step.hal_genome, step.node_id, leaf
+        ):
+            continue
         result = initializer.initialize(leaf, step.node_id, plan.node_to_hal[leaf], step.hal_genome)
         parameters = base_parameters | {"raw_psl_sha256": hashlib.sha256(result.raw_psl.encode()).hexdigest(),
                                         "normalized_mapping_sha256": _normalized_runs_checksum(result.runs)}
@@ -453,6 +472,7 @@ def _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializ
                     "query_genome": plan.node_to_hal[leaf], "target_genome": step.hal_genome,
                     "logical_child": leaf, "logical_parent": step.node_id,
                     "halsynteny_executable": result.executable, "halsynteny_version": result.version,
+                    "halsynteny_executable_sha256": initializer.executable_sha256,
                     "stdout": result.stdout, "stderr": result.stderr,
                     "warnings": ["halSynteny transitivity has not been established"]}
         leaf_summary = {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occ), "initializer": "halsynteny"}
@@ -461,6 +481,7 @@ def _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializ
             "node_map_sha256": plan.node_map_sha256, "query_genome": plan.node_to_hal[leaf],
             "target_genome": step.hal_genome, "logical_child": leaf, "logical_parent": step.node_id,
             "halsynteny_executable": result.executable, "halsynteny_version": result.version,
+            "halsynteny_executable_sha256": initializer.executable_sha256,
             "raw_psl_sha256": hashlib.sha256(result.raw_psl.encode()).hexdigest(),
             "normalized_mapping_sha256": _normalized_runs_checksum(result.runs)}
         _write_checkpoint_files(path, {
@@ -755,6 +776,48 @@ def _can_reuse(
     if child_manifest_checksums and manifest.get("input_checkpoint_checksums") != child_manifest_checksums:
         raise CheckpointError(f"stale child checkpoint identity for {path}")
     _validate_output_checksums(path, manifest)
+    return True
+
+
+def _can_reuse_halsynteny_leaf(
+    path: Path,
+    parameters: dict[str, object],
+    identity: dict[str, object],
+    initializer: HalSyntenyLeafInitializer,
+    query_genome: str,
+    target_genome: str,
+    parent_node: str,
+    logical_child: str,
+) -> bool:
+    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
+        raise CheckpointError(f"stale checkpoint schema for {path}")
+    stored_parameters = manifest.get("parameters", {})
+    if any(stored_parameters.get(key) != value for key, value in parameters.items()):
+        raise CheckpointError(f"stale checkpoint parameters for {path}")
+    if manifest.get("run_identity", identity) != identity:
+        raise CheckpointError(f"stale checkpoint input identity for {path}")
+    expected = {
+        "hal_sha256": initializer.hal_checksum,
+        "query_genome": query_genome,
+        "target_genome": target_genome,
+        "logical_child": logical_child,
+        "logical_parent": parent_node,
+        "halsynteny_executable": initializer.executable,
+        "halsynteny_version": initializer.executable_version,
+        "halsynteny_executable_sha256": initializer.executable_sha256,
+    }
+    if manifest.get("hal_sha256") != expected["hal_sha256"] or any(
+        manifest.get(key) != value for key, value in expected.items()
+    ):
+        raise CheckpointError(f"stale checkpoint leaf identity for {path}")
+    _validate_output_checksums(path, manifest)
+    raw_path = path / "raw_halsynteny.psl"
+    runs_path = path / "parent_edge_runs.tsv"
+    raw_sha = hashlib.sha256(raw_path.read_bytes()).hexdigest()
+    normalized_sha = _normalized_runs_checksum(read_edge_mapping_runs(runs_path))
+    if raw_sha != manifest.get("raw_psl_sha256") or normalized_sha != manifest.get("normalized_mapping_sha256"):
+        raise CheckpointError(f"stale checkpoint mapping identity for {path}")
     return True
 
 

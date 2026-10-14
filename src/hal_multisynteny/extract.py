@@ -130,7 +130,7 @@ def parse_halsynteny_psl(
             raise ExtractionError(f"halSynteny PSL line {line_number}: query extrema disagree with qStart/qEnd")
         if (min(a[0] for a in t_intervals), max(a[1] for a in t_intervals)) != (tstart, tend):
             raise ExtractionError(f"halSynteny PSL line {line_number}: target extrema disagree with tStart/tEnd")
-        rows.append({"fields": tuple(fields), "qkey": (fields[9], qsize, qstrand, tuple(q_intervals)),
+        rows.append({"fields": tuple(fields), "qkey": (fields[9], qsize, tuple(q_intervals)),
                      "qname": fields[9], "tname": fields[13], "q_intervals": tuple(q_intervals),
                      "t_intervals": tuple(t_intervals), "strand": "+" if qstrand == tstrand else "-"})
     rows.sort(key=lambda row: (row["qkey"], row["fields"]))
@@ -143,14 +143,14 @@ def parse_halsynteny_psl(
     overlapping_families: set[tuple[object, ...]] = set()
     for index, first_key in enumerate(family_keys):
         for second_key in family_keys[index + 1:]:
-            if first_key[0] != second_key[0] or first_key[2] != second_key[2]:
+            if first_key[0] != second_key[0]:
                 continue
-            if any(a[0] < b[1] and b[0] < a[1] for a in first_key[3] for b in second_key[3]):
+            if any(a[0] < b[1] and b[0] < a[1] for a in first_key[2] for b in second_key[2]):
                 overlapping_families.update((first_key, second_key))
     for family_key, alternatives in sorted(families.items(), key=lambda item: repr(item[0])):
         digest = hashlib.sha256(repr(family_key).encode()).hexdigest()[:16]
         block_id = f"HSB_{digest}"
-        q_intervals = family_key[3]
+        q_intervals = family_key[2]
         qchrom = family_key[0]
         family_status = "duplicated" if len(alternatives) > 1 or family_key in overlapping_families else "unique"
         blocks.append(NodeBlock(block_id, child_node, qchrom, min(x[0] for x in q_intervals), max(x[1] for x in q_intervals),
@@ -183,12 +183,14 @@ class HalSyntenyLeafInitializer:
         if not self.executable:
             raise ExtractionError("missing HAL tool: halSynteny is not on PATH")
         self.executable = str(Path(self.executable).resolve())
-        self.executable_version = _probe_version(self.executable)
+        self.executable_version = ""
+        self.executable_sha256 = sha256_file(self.executable) if Path(self.executable).is_file() else ""
         self.min_block_size = min_block_size
         self.max_anchor_distance = max_anchor_distance
         self.hal_checksum = sha256_file(self.hal_path)
 
     def initialize(self, child_node: str, parent_node: str, query_genome: str, target_genome: str) -> HalSyntenyLeafResult:
+        version = self.probe_version()
         with tempfile.TemporaryDirectory(prefix="hms-synteny-") as temp_name:
             output = Path(temp_name) / "halsynteny.psl"
             help_run = subprocess.run((self.executable, "--help"), check=False, capture_output=True, text=True)
@@ -200,9 +202,13 @@ class HalSyntenyLeafInitializer:
             raw = output.read_text(encoding="utf-8") if output.exists() else completed.stdout
         blocks, runs = parse_halsynteny_psl(raw, child_node=child_node, parent_node=parent_node,
                                            query_genome=query_genome, target_genome=target_genome, command=command)
-        version = self.executable_version
         return HalSyntenyLeafResult(blocks, runs, raw, command, completed.stdout, completed.stderr,
                                     {"halSynteny": version}, str(self.executable), version)
+
+    def probe_version(self) -> str:
+        if not self.executable_version:
+            self.executable_version = _probe_version(self.executable)
+        return self.executable_version
 
 
 @dataclass(frozen=True, slots=True)

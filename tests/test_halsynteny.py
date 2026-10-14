@@ -53,6 +53,21 @@ def test_duplicate_chains_are_retained_with_deterministic_ids():
     assert {run.copy_id for run in runs} == {"1", "2"}
 
 
+def test_forward_and_reverse_alternatives_share_query_family():
+    forward = psl(sizes="100,", qstarts="0,", tstarts="100,", count=1, q_end="100", t_end="200")
+    reverse = psl(strand="-+", sizes="100,", qstarts="200,", tstarts="220,", count=1,
+                  q_end="100", t_start="220", t_end="320")
+    blocks, runs = parse_halsynteny_psl(
+        forward + "\n" + reverse, child_node="A", parent_node="N", query_genome="HAL_A",
+        target_genome="HAL_N", command=("halSynteny",),
+    )
+    assert len(blocks) == 1
+    assert len({run.child_block_id for run in runs}) == 1
+    assert {run.copy_id for run in runs} == {"1", "2"}
+    assert {run.status for run in runs} == {"duplicated"}
+    assert {run.strand for run in runs} == {"+", "-"}
+
+
 def test_duplicate_alternatives_reach_local_duplication_conflict():
     text = psl(sizes="100,", qstarts="0,", tstarts="100,", count=1, q_end="100", t_end="200") + "\n" + psl(sizes="100,", qstarts="0,", tstarts="220,", count=1, q_end="100", t_start="220", t_end="320")
     _, left_runs = parse_halsynteny_psl(text, child_node="A", parent_node="N", query_genome="HAL_A", target_genome="HAL_N", command=("halSynteny",))

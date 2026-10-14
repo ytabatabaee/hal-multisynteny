@@ -479,6 +479,22 @@ def merge_decision(
 ) -> MergeDecision:
     reasons: list[str] = []
     gap = current.start - previous.end
+    conflict_reasons = {
+        "orientation_conflict": "unresolved_orientation_conflict",
+        "order_conflict": "unresolved_order_conflict",
+        "duplication_conflict": "unresolved_duplication_conflict",
+        "ambiguous": "ambiguous_evidence",
+        "unaligned": "unaligned_evidence",
+        "complex": "complex_conflict",
+    }
+    for classification in (previous.classification, current.classification):
+        reason = conflict_reasons.get(classification)
+        if reason and reason not in reasons:
+            reasons.append(reason)
+    if reasons:
+        return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
+                             False, "", tuple(reasons), gap, _child_gap_text(previous, current, "left"),
+                             _child_gap_text(previous, current, "right"))
     if previous.chrom != current.chrom:
         reasons.append("different_parent_chromosome")
     if gap > config.max_merge_gap:

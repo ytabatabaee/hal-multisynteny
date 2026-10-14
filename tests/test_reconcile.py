@@ -11,7 +11,9 @@ from hal_multisynteny.io import PARENT_RUN_FIELDS, read_parent_runs, validate_pa
 from hal_multisynteny.models import ParentMappedRun
 from hal_multisynteny.reconcile import (
     ReconcileConfig,
+    _Atom,
     _project_run_to_parent_block,
+    merge_decision,
     reconcile_node,
 )
 
@@ -61,6 +63,27 @@ def reconcile(left, right, **kwargs):
         right_node="right",
         config=ReconcileConfig(min_block_length=1, **kwargs),
     )
+
+
+@pytest.mark.parametrize(
+    ("classification", "reason"),
+    [
+        ("orientation_conflict", "unresolved_orientation_conflict"),
+        ("order_conflict", "unresolved_order_conflict"),
+        ("duplication_conflict", "unresolved_duplication_conflict"),
+        ("ambiguous", "ambiguous_evidence"),
+        ("unaligned", "unaligned_evidence"),
+        ("complex", "complex_conflict"),
+    ],
+)
+def test_conflict_atoms_are_never_merge_eligible(classification, reason):
+    first_run = mapped("left", "L", "occ", 0, 10, status="unique")
+    second_run = mapped("left", "L", "occ", 10, 20, status="unique")
+    first = _Atom("anc1", 0, 10, (first_run,), (), classification, True)
+    second = _Atom("anc1", 10, 20, (second_run,), (), classification, True)
+    decision = merge_decision(first, second, ReconcileConfig(min_block_length=1))
+    assert not decision.can_merge
+    assert reason in decision.rejection_reasons
 
 
 def classifications(result):
