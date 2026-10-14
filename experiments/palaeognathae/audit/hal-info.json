@@ -1,0 +1,58 @@
+{
+  "commands": [
+    [
+      "/private/tmp/hal-micromamba-root/envs/cactus-mac/bin/halStats",
+      "data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+      "--genomes"
+    ],
+    [
+      "/private/tmp/hal-micromamba-root/envs/cactus-mac/bin/halStats",
+      "data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+      "--tree"
+    ],
+    [
+      "/private/tmp/hal-micromamba-root/envs/cactus-mac/bin/halStats",
+      "data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+      "--sequenceStats",
+      "<genome>"
+    ]
+  ],
+  "genomes": [
+    "GCA_047922985.1",
+    "GCF_028389875.1",
+    "GCF_036370855.1",
+    "GCF_036417845.1",
+    "GCF_040807025.1",
+    "PalaeognathaeAnc0",
+    "PalaeognathaeAnc1",
+    "PalaeognathaeAnc2",
+    "PalaeognathaeAnc3"
+  ],
+  "hal_path": "data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+  "hal_sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+  "hal_size": 7470552826,
+  "metadata_level": "basic",
+  "parent_map": {
+    "GCA_047922985.1": "PalaeognathaeAnc1",
+    "GCF_028389875.1": "PalaeognathaeAnc2",
+    "GCF_036370855.1": "PalaeognathaeAnc3",
+    "GCF_036417845.1": "PalaeognathaeAnc3",
+    "GCF_040807025.1": "PalaeognathaeAnc0",
+    "PalaeognathaeAnc1": "PalaeognathaeAnc0",
+    "PalaeognathaeAnc2": "PalaeognathaeAnc1",
+    "PalaeognathaeAnc3": "PalaeognathaeAnc2"
+  },
+  "sequence_lengths": {},
+  "timestamp": "2026-10-14T20:28:26.537825+00:00",
+  "tools": {
+    "halLiftover": {
+      "path": "/private/tmp/hal-micromamba-root/envs/cactus-mac/bin/halLiftover",
+      "version": "Unrecognized option: --version"
+    },
+    "halStats": {
+      "path": "/private/tmp/hal-micromamba-root/envs/cactus-mac/bin/halStats",
+      "version": "Unrecognized option: --version"
+    }
+  },
+  "version": "0.4.0"
+}

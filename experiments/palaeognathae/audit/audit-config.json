@@ -1,0 +1,34 @@
+{
+  "audit_id": "palaeognathae-direct-edge-20261014",
+  "clade_root": "PalaeognathaeAnc0",
+  "hal": "../../../data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+  "output_dir": "results",
+  "random_seed": 20261014,
+  "leaves": [
+    {"logical_name": "GCA_047922985.1", "hal_genome": "GCA_047922985.1"},
+    {"logical_name": "GCF_028389875.1", "hal_genome": "GCF_028389875.1"},
+    {"logical_name": "GCF_036370855.1", "hal_genome": "GCF_036370855.1"},
+    {"logical_name": "GCF_036417845.1", "hal_genome": "GCF_036417845.1"},
+    {"logical_name": "GCF_040807025.1", "hal_genome": "GCF_040807025.1"}
+  ],
+  "sampling": {
+    "chromosomes": "all",
+    "avoid_overlaps": false,
+    "intervals_per_length_bin": 1000,
+    "length_bins": [
+      [50, 99],
+      [100, 499],
+      [500, 999],
+      [1000, 4999],
+      [5000, 9999],
+      [10000, 50000]
+    ],
+    "exclude_sequences_regex": null,
+    "maximum_ambiguous_fraction": null
+  },
+  "execution": {
+    "batch_size": 1000,
+    "workers": 1,
+    "resume": true
+  }
+}
