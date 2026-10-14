@@ -24,7 +24,7 @@ jobs:
       - name: Ruff
         run: ruff check .
       - name: Tests without HAL
-        run: pytest -m "not hal"
+        run: python -m pytest -m "not hal"
       - name: Build package
         run: python -m build
 
@@ -36,12 +36,15 @@ jobs:
       - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: hal-ci
+          condarc: |
+            channels:
+              - conda-forge
+              - bioconda
+            channel_priority: strict
           create-args: >-
             python=3.12
             pip
             hal=2.3.0
-          channels: conda-forge,bioconda
-          channel-priority: strict
       - name: Install package
         shell: bash -el {0}
         run: |
@@ -50,6 +53,7 @@ jobs:
       - name: Confirm HAL tools
         shell: bash -el {0}
         run: |
+          micromamba list -n hal-ci hal
           micromamba run -n hal-ci bash -lc 'command -v halStats && command -v halLiftover && command -v maf2hal'
           micromamba run -n hal-ci bash -lc 'halStats --version || true; halLiftover --version || true; maf2hal --version || true'
       - name: Build tiny HAL fixture
@@ -57,7 +61,7 @@ jobs:
         run: micromamba run -n hal-ci scripts/build_tiny_hal_fixture.sh
       - name: Run HAL integration tests
         shell: bash -el {0}
-        run: micromamba run -n hal-ci pytest -m hal
+        run: micromamba run -n hal-ci python -m pytest -m hal
       - name: Run local tiny HAL integration smoke
         shell: bash -el {0}
         run: micromamba run -n hal-ci scripts/run_tiny_hal_integration.sh hal-ci-output

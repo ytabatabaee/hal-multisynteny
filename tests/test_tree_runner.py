@@ -4,21 +4,34 @@ import json
 import os
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from hal_multisynteny.audit import AuditBlock, _classify_liftover_output, audit_liftover
 from hal_multisynteny.cli import main
-from hal_multisynteny.extract import ExtractionError, FakeEdgeExtractor, HalEdgeExtractor
+from hal_multisynteny.extract import (
+    EdgeExtractionResult,
+    ExtractionError,
+    FakeEdgeExtractor,
+    HalEdgeExtractor,
+)
 from hal_multisynteny.hal import HalPreflightError, inspect_hal
 from hal_multisynteny.io import EDGE_MAPPING_FIELDS, read_leaf_occurrences
-from hal_multisynteny.models import LeafOccurrence, NodeBlock, NodeBlockOccurrence
+from hal_multisynteny.models import (
+    EdgeMappingRun,
+    LeafOccurrence,
+    NodeBlock,
+    NodeBlockOccurrence,
+    UnmappedEdgeEvidence,
+)
 from hal_multisynteny.reconcile import ReconciledOccurrence
 from hal_multisynteny.runner import (
     CheckpointError,
     NodePackage,
     RunTreeConfig,
     _propagate_leaf_occurrences,
+    _update_node_statistics,
     _write_checkpoint_files,
     load_package,
     run_tree,
@@ -134,6 +147,33 @@ def test_sha256_file_matches_hashlib(tmp_path):
     path = tmp_path / "data.bin"
     path.write_bytes(data)
     assert sha256_file(path, chunk_size=17) == hashlib.sha256(data).hexdigest()
+
+
+def test_mapping_status_statistics_reconcile_mapped_and_unmapped_blocks(tmp_path):
+    left_package = NodePackage(
+        "left", "HAL_LEFT", tmp_path / "left",
+        (NodeBlock("mapped", "left", "chr1", 0, 10), NodeBlock("missing", "left", "chr1", 20, 30)),
+        (), (), {},
+    )
+    right_package = NodePackage(
+        "right", "HAL_RIGHT", tmp_path / "right",
+        (NodeBlock("right_block", "right", "chr1", 0, 10),), (), (), {},
+    )
+    left_run = EdgeMappingRun("left", "mapped", "mapped.1", "chr1", 0, 10, "parent", "chr1", 0, 10,
+                              "+", "1", "unique", "left:mapped")
+    left_unmapped = UnmappedEdgeEvidence("left", "parent", "missing", "chr1", 20, 30, "unaligned", "missing", "left:missing")
+    right_run = EdgeMappingRun("right", "right_block", "right_block.1", "chr1", 0, 10, "parent", "chr1", 0, 10,
+                               "+", "1", "unique", "right:right_block")
+    left_result = EdgeExtractionResult((left_run,), (left_unmapped,), "test", {}, ())
+    right_result = EdgeExtractionResult((right_run,), (), "test", {}, ())
+    result = SimpleNamespace(statistics={})
+    _update_node_statistics(result, left_package, right_package, left_result, right_result, ())
+    assert result.statistics["left_mapping_status_denominator"] == 2
+    assert result.statistics["left_mapping_status_counts"] == {
+        "unique": 1, "duplicated": 0, "ambiguous": 0, "unaligned": 1,
+    }
+    assert result.statistics["mapping_status_denominator"] == 3
+    assert sum(result.statistics["mapping_status_counts"].values()) == 3
 
 
 def test_four_leaf_fake_tree_end_to_end_resume_force_and_dry_run(tmp_path):

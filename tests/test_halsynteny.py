@@ -68,6 +68,18 @@ def test_forward_and_reverse_alternatives_share_query_family():
     assert {run.strand for run in runs} == {"+", "-"}
 
 
+def test_equivalent_target_rows_are_one_unique_alternative():
+    row = psl(sizes="100,", qstarts="0,", tstarts="100,", count=1, q_end="100", t_end="200")
+    blocks, runs = parse_halsynteny_psl(
+        row + "\n" + row, child_node="A", parent_node="N", query_genome="HAL_A",
+        target_genome="HAL_N", command=("halSynteny",),
+    )
+    assert len(blocks) == 1
+    assert len(runs) == 1
+    assert runs[0].copy_id == "1"
+    assert runs[0].status == "unique"
+
+
 def test_duplicate_alternatives_reach_local_duplication_conflict():
     text = psl(sizes="100,", qstarts="0,", tstarts="100,", count=1, q_end="100", t_end="200") + "\n" + psl(sizes="100,", qstarts="0,", tstarts="220,", count=1, q_end="100", t_start="220", t_end="320")
     _, left_runs = parse_halsynteny_psl(text, child_node="A", parent_node="N", query_genome="HAL_A", target_genome="HAL_N", command=("halSynteny",))

@@ -972,7 +972,7 @@ def test_release_integrity_files_and_documentation():
     )
     for version in ("3.10", "3.11", "3.12"):
         assert version in workflow_text, f"workflow does not include Python {version}"
-    for command in ("python -m ruff check .", "python -m pytest -q", "python -m build"):
+    for command in ("python -m ruff check .", 'python -m pytest -m "not hal"', "python -m build"):
         assert command in workflow_text, f"workflow does not run {command}"
     assert "--copy-id-scope local" in readme, "README does not document local copy scope"
     assert "--copy-id-scope global" in readme, "README does not document global copy scope"

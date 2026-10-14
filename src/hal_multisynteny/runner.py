@@ -398,14 +398,20 @@ def _update_node_statistics(result, left_package, right_package, left_result, ri
         }
         result.statistics[f"{side}_mapping_status_counts"]["unaligned"] += len(unmapped_evidence_blocks)
         result.statistics[f"{side}_unmapped_evidence_count"] = len(unmapped_evidence_blocks)
+        side_denominator = len(occurrences) + len(unmapped_evidence_blocks)
+        result.statistics[f"{side}_mapping_status_denominator"] = side_denominator
+        if sum(result.statistics[f"{side}_mapping_status_counts"].values()) != side_denominator:
+            raise CheckpointError(f"{side} mapping status counts do not reconcile with their denominator")
     result.statistics["leaf_occurrences_represented"] = len(leaf_occurrences)
     result.statistics["mapping_status_denominator"] = (
-        result.statistics["left_mapping_occurrence_count"] + result.statistics["right_mapping_occurrence_count"]
+        result.statistics["left_mapping_status_denominator"] + result.statistics["right_mapping_status_denominator"]
     )
     result.statistics["mapping_status_counts"] = {
         status: sum(result.statistics[f"{side}_mapping_status_counts"][status] for side in ("left", "right"))
         for status in ("unique", "duplicated", "ambiguous", "unaligned")
     }
+    if sum(result.statistics["mapping_status_counts"].values()) != result.statistics["mapping_status_denominator"]:
+        raise CheckpointError("mapping status counts do not reconcile with their denominator")
     # Keep the historical top-level names, but make them obey the same
     # logical-occurrence denominator as the side-specific diagnostics.
     for status in ("unique", "duplicated", "ambiguous", "unaligned"):

@@ -152,15 +152,15 @@ def parse_halsynteny_psl(
         block_id = f"HSB_{digest}"
         q_intervals = family_key[2]
         qchrom = family_key[0]
-        family_status = "duplicated" if len(alternatives) > 1 or family_key in overlapping_families else "unique"
-        blocks.append(NodeBlock(block_id, child_node, qchrom, min(x[0] for x in q_intervals), max(x[1] for x in q_intervals),
-                                "halsynteny_chain", family_status))
         seen_targets: set[tuple[object, ...]] = set()
         unique_alternatives = []
         for alternative in alternatives:
             target_key = (alternative["tname"], alternative["t_intervals"], alternative["strand"])
             if target_key not in seen_targets:
                 seen_targets.add(target_key); unique_alternatives.append(alternative)
+        family_status = "duplicated" if len(unique_alternatives) > 1 or family_key in overlapping_families else "unique"
+        blocks.append(NodeBlock(block_id, child_node, qchrom, min(x[0] for x in q_intervals), max(x[1] for x in q_intervals),
+                                "halsynteny_chain", family_status))
         status = family_status
         for copy_index, alternative in enumerate(unique_alternatives, start=1):
             occurrence_id = f"{block_id}.occurrence{copy_index:04d}"
