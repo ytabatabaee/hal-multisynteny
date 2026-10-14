@@ -1,0 +1,7 @@
+chrQ	0	10	forward	0	+
+chrQ	10	40	reverse_multi	0	+
+chrQ	60	90	forward_gapped	0	+
+chrQ	0	40	orientation_change	0	+
+chrQ	80	100	chromosome_change	0	+
+chrQ	10	40	reverse_query_negative	0	-
+chrQ	60	90	forward_query_negative	0	-

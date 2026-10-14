@@ -1,0 +1,29 @@
+##maf version=1 scoring=psl-orientation
+
+a score=0
+s PSL_parent.chrP 0 10 + 120 AAAAAAAAAA
+s PSL_child.chrQ  0 10 + 100 AAAAAAAAAA
+
+a score=0
+s PSL_parent.chrP 20 10 + 120 CCCCCCCCCC
+s PSL_child.chrQ  60 10 - 100 CCCCCCCCCC
+
+a score=0
+s PSL_parent.chrP 40 10 + 120 GGGGGGGGGG
+s PSL_child.chrQ  70 10 - 100 GGGGGGGGGG
+
+a score=0
+s PSL_parent.chrP 60 10 + 120 TTTTTTTTTT
+s PSL_child.chrQ  80 10 - 100 TTTTTTTTTT
+
+a score=0
+s PSL_parent.chrP 80 10 + 120 AAAAAAAAAA
+s PSL_child.chrQ  60 10 + 100 AAAAAAAAAA
+
+a score=0
+s PSL_parent.chrP 100 10 + 120 CCCCCCCCCC
+s PSL_child.chrQ  80 10 + 100 CCCCCCCCCC
+
+a score=0
+s PSL_parent.chrOther 0 10 + 20 GGGGGGGGGG
+s PSL_child.chrQ     90 10 + 100 GGGGGGGGGG

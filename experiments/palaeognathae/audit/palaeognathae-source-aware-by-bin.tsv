@@ -1,145 +1,121 @@
-group	scope	length_bin	classification	count	fraction	record_count	overlap_records	disjoint_records	multi_target_chromosomes	multi_target_strands	jointly_collinear	duplicated_source_bases	globally_mapped_source_bases	globally_uncovered_source_bases
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	single_record_collinear_full_coverage	259	0.259	472	0	0	0	0	472	0	32268	2814
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	single_record_collinear_with_source_gaps	213	0.213	472	0	0	0	0	472	0	32268	2814
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	rearranged_or_orientation_conflict	0	0.0	472	0	0	0	0	472	0	32268	2814
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	multiple_records_unresolved	0	0.0	472	0	0	0	0	472	0	32268	2814
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	unmapped	528	0.528	472	0	0	0	0	472	0	32268	2814
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	invalid_or_ambiguous	0	0.0	472	0	0	0	0	472	0	32268	2814
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	single_record_collinear_full_coverage	121	0.121	485	0	1	1	0	483	0	122276	18931
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	single_record_collinear_with_source_gaps	362	0.362	485	0	1	1	0	483	0	122276	18931
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	rearranged_or_orientation_conflict	0	0.0	485	0	1	1	0	483	0	122276	18931
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	multiple_records_unresolved	1	0.001	485	0	1	1	0	483	0	122276	18931
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	unmapped	516	0.516	485	0	1	1	0	483	0	122276	18931
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	invalid_or_ambiguous	0	0.0	485	0	1	1	0	483	0	122276	18931
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	single_record_collinear_full_coverage	45	0.045	528	0	8	7	2	511	0	326070	64395
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	single_record_collinear_with_source_gaps	466	0.466	528	0	8	7	2	511	0	326070	64395
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	rearranged_or_orientation_conflict	0	0.0	528	0	8	7	2	511	0	326070	64395
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	multiple_records_unresolved	8	0.008	528	0	8	7	2	511	0	326070	64395
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	unmapped	481	0.481	528	0	8	7	2	511	0	326070	64395
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	invalid_or_ambiguous	0	0.0	528	0	8	7	2	511	0	326070	64395
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	single_record_collinear_full_coverage	4	0.004	600	0	35	30	14	519	0	1362396	351756
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	single_record_collinear_with_source_gaps	515	0.515	600	0	35	30	14	519	0	1362396	351756
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	rearranged_or_orientation_conflict	0	0.0	600	0	35	30	14	519	0	1362396	351756
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	multiple_records_unresolved	35	0.035	600	0	35	30	14	519	0	1362396	351756
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	unmapped	446	0.446	600	0	35	30	14	519	0	1362396	351756
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	invalid_or_ambiguous	0	0.0	600	0	35	30	14	519	0	1362396	351756
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	single_record_collinear_full_coverage	0	0.0	651	0	68	56	31	472	0	3129882	948889
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	single_record_collinear_with_source_gaps	472	0.472	651	0	68	56	31	472	0	3129882	948889
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	rearranged_or_orientation_conflict	0	0.0	651	0	68	56	31	472	0	3129882	948889
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	multiple_records_unresolved	68	0.068	651	0	68	56	31	472	0	3129882	948889
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	unmapped	460	0.46	651	0	68	56	31	472	0	3129882	948889
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	invalid_or_ambiguous	0	0.0	651	0	68	56	31	472	0	3129882	948889
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	single_record_collinear_full_coverage	0	0.0	934	0	184	131	84	389	0	12106280	3639036
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	single_record_collinear_with_source_gaps	389	0.389	934	0	184	131	84	389	0	12106280	3639036
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	rearranged_or_orientation_conflict	0	0.0	934	0	184	131	84	389	0	12106280	3639036
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	multiple_records_unresolved	184	0.184	934	0	184	131	84	389	0	12106280	3639036
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	unmapped	427	0.427	934	0	184	131	84	389	0	12106280	3639036
-GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	invalid_or_ambiguous	0	0.0	934	0	184	131	84	389	0	12106280	3639036
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	single_record_collinear_full_coverage	740	0.74	831	0	2	1	1	827	0	60548	878
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	single_record_collinear_with_source_gaps	87	0.087	831	0	2	1	1	827	0	60548	878
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	rearranged_or_orientation_conflict	0	0.0	831	0	2	1	1	827	0	60548	878
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	multiple_records_unresolved	2	0.002	831	0	2	1	1	827	0	60548	878
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	unmapped	171	0.171	831	0	2	1	1	827	0	60548	878
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	invalid_or_ambiguous	0	0.0	831	0	2	1	1	827	0	60548	878
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	single_record_collinear_full_coverage	639	0.639	864	0	11	11	8	840	0	246480	8755
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	single_record_collinear_with_source_gaps	201	0.201	864	0	11	11	8	840	0	246480	8755
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	rearranged_or_orientation_conflict	0	0.0	864	0	11	11	8	840	0	246480	8755
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	multiple_records_unresolved	11	0.011	864	0	11	11	8	840	0	246480	8755
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	unmapped	149	0.149	864	0	11	11	8	840	0	246480	8755
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	invalid_or_ambiguous	0	0.0	864	0	11	11	8	840	0	246480	8755
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	single_record_collinear_full_coverage	488	0.488	927	0	44	37	19	833	0	624852	25812
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	single_record_collinear_with_source_gaps	345	0.345	927	0	44	37	19	833	0	624852	25812
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	rearranged_or_orientation_conflict	0	0.0	927	0	44	37	19	833	0	624852	25812
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	multiple_records_unresolved	44	0.044	927	0	44	37	19	833	0	624852	25812
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	unmapped	123	0.123	927	0	44	37	19	833	0	624852	25812
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	invalid_or_ambiguous	0	0.0	927	0	44	37	19	833	0	624852	25812
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	single_record_collinear_full_coverage	244	0.244	1067	0	98	87	44	837	0	2415489	144398
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	single_record_collinear_with_source_gaps	593	0.593	1067	0	98	87	44	837	0	2415489	144398
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	rearranged_or_orientation_conflict	0	0.0	1067	0	98	87	44	837	0	2415489	144398
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	multiple_records_unresolved	98	0.098	1067	0	98	87	44	837	0	2415489	144398
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	unmapped	65	0.065	1067	0	98	87	44	837	0	2415489	144398
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	invalid_or_ambiguous	0	0.0	1067	0	98	87	44	837	0	2415489	144398
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	single_record_collinear_full_coverage	61	0.061	1261	0	153	112	58	828	0	6823273	347196
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	single_record_collinear_with_source_gaps	767	0.767	1261	0	153	112	58	828	0	6823273	347196
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	rearranged_or_orientation_conflict	0	0.0	1261	0	153	112	58	828	0	6823273	347196
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	multiple_records_unresolved	153	0.153	1261	0	153	112	58	828	0	6823273	347196
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	unmapped	19	0.019	1261	0	153	112	58	828	0	6823273	347196
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	invalid_or_ambiguous	0	0.0	1261	0	153	112	58	828	0	6823273	347196
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	single_record_collinear_full_coverage	13	0.013	1611	0	300	181	87	694	0	25385253	1081276
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	single_record_collinear_with_source_gaps	681	0.681	1611	0	300	181	87	694	0	25385253	1081276
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	rearranged_or_orientation_conflict	0	0.0	1611	0	300	181	87	694	0	25385253	1081276
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	multiple_records_unresolved	300	0.3	1611	0	300	181	87	694	0	25385253	1081276
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	unmapped	6	0.006	1611	0	300	181	87	694	0	25385253	1081276
-PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	invalid_or_ambiguous	0	0.0	1611	0	300	181	87	694	0	25385253	1081276
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	single_record_collinear_full_coverage	632	0.632	741	0	4	2	0	732	0	54049	1173
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	single_record_collinear_with_source_gaps	100	0.1	741	0	4	2	0	732	0	54049	1173
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	rearranged_or_orientation_conflict	0	0.0	741	0	4	2	0	732	0	54049	1173
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	multiple_records_unresolved	4	0.004	741	0	4	2	0	732	0	54049	1173
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	unmapped	264	0.264	741	0	4	2	0	732	0	54049	1173
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	invalid_or_ambiguous	0	0.0	741	0	4	2	0	732	0	54049	1173
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	single_record_collinear_full_coverage	541	0.541	821	0	12	11	6	793	0	235138	8555
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	single_record_collinear_with_source_gaps	252	0.252	821	0	12	11	6	793	0	235138	8555
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	rearranged_or_orientation_conflict	0	0.0	821	0	12	11	6	793	0	235138	8555
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	multiple_records_unresolved	12	0.012	821	0	12	11	6	793	0	235138	8555
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	unmapped	195	0.195	821	0	12	11	6	793	0	235138	8555
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	invalid_or_ambiguous	0	0.0	821	0	12	11	6	793	0	235138	8555
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	single_record_collinear_full_coverage	427	0.427	882	0	36	32	15	804	0	593947	37811
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	single_record_collinear_with_source_gaps	377	0.377	882	0	36	32	15	804	0	593947	37811
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	rearranged_or_orientation_conflict	0	0.0	882	0	36	32	15	804	0	593947	37811
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	multiple_records_unresolved	36	0.036	882	0	36	32	15	804	0	593947	37811
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	unmapped	160	0.16	882	0	36	32	15	804	0	593947	37811
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	invalid_or_ambiguous	0	0.0	882	0	36	32	15	804	0	593947	37811
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	single_record_collinear_full_coverage	165	0.165	1061	0	116	107	63	762	0	2199748	190190
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	single_record_collinear_with_source_gaps	597	0.597	1061	0	116	107	63	762	0	2199748	190190
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	rearranged_or_orientation_conflict	0	0.0	1061	0	116	107	63	762	0	2199748	190190
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	multiple_records_unresolved	116	0.116	1061	0	116	107	63	762	0	2199748	190190
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	unmapped	122	0.122	1061	0	116	107	63	762	0	2199748	190190
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	invalid_or_ambiguous	0	0.0	1061	0	116	107	63	762	0	2199748	190190
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	single_record_collinear_full_coverage	26	0.026	1295	0	197	170	95	744	0	6176988	689831
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	single_record_collinear_with_source_gaps	718	0.718	1295	0	197	170	95	744	0	6176988	689831
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	rearranged_or_orientation_conflict	0	0.0	1295	0	197	170	95	744	0	6176988	689831
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	multiple_records_unresolved	197	0.197	1295	0	197	170	95	744	0	6176988	689831
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	unmapped	59	0.059	1295	0	197	170	95	744	0	6176988	689831
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	invalid_or_ambiguous	0	0.0	1295	0	197	170	95	744	0	6176988	689831
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	single_record_collinear_full_coverage	6	0.006	1970	0	340	301	202	620	0	23730557	1833104
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	single_record_collinear_with_source_gaps	614	0.614	1970	0	340	301	202	620	0	23730557	1833104
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	rearranged_or_orientation_conflict	0	0.0	1970	0	340	301	202	620	0	23730557	1833104
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	multiple_records_unresolved	340	0.34	1970	0	340	301	202	620	0	23730557	1833104
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	unmapped	40	0.04	1970	0	340	301	202	620	0	23730557	1833104
-PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	invalid_or_ambiguous	0	0.0	1970	0	340	301	202	620	0	23730557	1833104
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	single_record_collinear_full_coverage	597	0.597	683	0	0	0	0	683	0	50135	1028
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	single_record_collinear_with_source_gaps	86	0.086	683	0	0	0	0	683	0	50135	1028
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	rearranged_or_orientation_conflict	0	0.0	683	0	0	0	0	683	0	50135	1028
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	multiple_records_unresolved	0	0.0	683	0	0	0	0	683	0	50135	1028
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	unmapped	317	0.317	683	0	0	0	0	683	0	50135	1028
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	invalid_or_ambiguous	0	0.0	683	0	0	0	0	683	0	50135	1028
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	single_record_collinear_full_coverage	533	0.533	747	0	8	7	5	729	0	213627	8317
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	single_record_collinear_with_source_gaps	196	0.196	747	0	8	7	5	729	0	213627	8317
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	rearranged_or_orientation_conflict	0	0.0	747	0	8	7	5	729	0	213627	8317
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	multiple_records_unresolved	8	0.008	747	0	8	7	5	729	0	213627	8317
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	unmapped	263	0.263	747	0	8	7	5	729	0	213627	8317
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	invalid_or_ambiguous	0	0.0	747	0	8	7	5	729	0	213627	8317
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	single_record_collinear_full_coverage	403	0.403	801	0	16	12	8	765	0	541936	45147
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	single_record_collinear_with_source_gaps	362	0.362	801	0	16	12	8	765	0	541936	45147
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	rearranged_or_orientation_conflict	0	0.0	801	0	16	12	8	765	0	541936	45147
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	multiple_records_unresolved	16	0.016	801	0	16	12	8	765	0	541936	45147
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	unmapped	219	0.219	801	0	16	12	8	765	0	541936	45147
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	invalid_or_ambiguous	0	0.0	801	0	16	12	8	765	0	541936	45147
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	single_record_collinear_full_coverage	190	0.19	878	0	56	42	29	745	0	1884334	255326
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	single_record_collinear_with_source_gaps	555	0.555	878	0	56	42	29	745	0	1884334	255326
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	rearranged_or_orientation_conflict	0	0.0	878	0	56	42	29	745	0	1884334	255326
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	multiple_records_unresolved	56	0.056	878	0	56	42	29	745	0	1884334	255326
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	unmapped	199	0.199	878	0	56	42	29	745	0	1884334	255326
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	invalid_or_ambiguous	0	0.0	878	0	56	42	29	745	0	1884334	255326
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	single_record_collinear_full_coverage	46	0.046	1093	0	137	119	69	749	0	5719517	753924
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	single_record_collinear_with_source_gaps	703	0.703	1093	0	137	119	69	749	0	5719517	753924
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	rearranged_or_orientation_conflict	0	0.0	1093	0	137	119	69	749	0	5719517	753924
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	multiple_records_unresolved	137	0.137	1093	0	137	119	69	749	0	5719517	753924
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	unmapped	114	0.114	1093	0	137	119	69	749	0	5719517	753924
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	invalid_or_ambiguous	0	0.0	1093	0	137	119	69	749	0	5719517	753924
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	single_record_collinear_full_coverage	6	0.006	1349	0	203	160	111	728	0	21955306	2829650
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	single_record_collinear_with_source_gaps	722	0.722	1349	0	203	160	111	728	0	21955306	2829650
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	rearranged_or_orientation_conflict	0	0.0	1349	0	203	160	111	728	0	21955306	2829650
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	multiple_records_unresolved	203	0.203	1349	0	203	160	111	728	0	21955306	2829650
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	unmapped	69	0.069	1349	0	203	160	111	728	0	21955306	2829650
-PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	invalid_or_ambiguous	0	0.0	1349	0	203	160	111	728	0	21955306	2829650
+edge	scope	length_bin	classification	count	fraction
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	unmapped	528	0.528
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	single_record_collinear_full_coverage	259	0.259
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	single_record_collinear_with_source_gaps	213	0.213
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	multiple_records_unresolved	0	0.0
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	invalid_or_ambiguous	0	0.0
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	unmapped	516	0.516
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	single_record_collinear_full_coverage	121	0.121
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	single_record_collinear_with_source_gaps	362	0.362
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	multiple_records_unresolved	1	0.001
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	invalid_or_ambiguous	0	0.0
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	unmapped	481	0.481
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	single_record_collinear_full_coverage	45	0.045
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	single_record_collinear_with_source_gaps	466	0.466
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	multiple_records_unresolved	8	0.008
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	invalid_or_ambiguous	0	0.0
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	unmapped	446	0.446
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	single_record_collinear_full_coverage	4	0.004
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	single_record_collinear_with_source_gaps	515	0.515
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	multiple_records_unresolved	35	0.035
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	invalid_or_ambiguous	0	0.0
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	unmapped	460	0.46
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	single_record_collinear_full_coverage	0	0.0
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	single_record_collinear_with_source_gaps	472	0.472
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	multiple_records_unresolved	68	0.068
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	invalid_or_ambiguous	0	0.0
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	unmapped	427	0.427
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	single_record_collinear_full_coverage	0	0.0
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	single_record_collinear_with_source_gaps	389	0.389
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	multiple_records_unresolved	184	0.184
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	unmapped	171	0.171
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	single_record_collinear_full_coverage	740	0.74
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	single_record_collinear_with_source_gaps	87	0.087
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	multiple_records_unresolved	2	0.002
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	unmapped	149	0.149
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	single_record_collinear_full_coverage	639	0.639
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	single_record_collinear_with_source_gaps	201	0.201
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	multiple_records_unresolved	11	0.011
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	unmapped	123	0.123
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	single_record_collinear_full_coverage	488	0.488
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	single_record_collinear_with_source_gaps	345	0.345
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	multiple_records_unresolved	44	0.044
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	unmapped	65	0.065
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	single_record_collinear_full_coverage	244	0.244
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	single_record_collinear_with_source_gaps	593	0.593
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	multiple_records_unresolved	98	0.098
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	unmapped	19	0.019
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	single_record_collinear_full_coverage	61	0.061
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	single_record_collinear_with_source_gaps	767	0.767
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	multiple_records_unresolved	153	0.153
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	unmapped	6	0.006
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	single_record_collinear_full_coverage	13	0.013
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	single_record_collinear_with_source_gaps	681	0.681
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	multiple_records_unresolved	300	0.3
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	unmapped	264	0.264
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	single_record_collinear_full_coverage	632	0.632
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	single_record_collinear_with_source_gaps	100	0.1
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	multiple_records_unresolved	4	0.004
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	unmapped	195	0.195
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	single_record_collinear_full_coverage	541	0.541
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	single_record_collinear_with_source_gaps	252	0.252
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	multiple_records_unresolved	12	0.012
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	unmapped	160	0.16
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	single_record_collinear_full_coverage	427	0.427
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	single_record_collinear_with_source_gaps	377	0.377
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	multiple_records_unresolved	36	0.036
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	unmapped	122	0.122
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	single_record_collinear_full_coverage	165	0.165
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	single_record_collinear_with_source_gaps	597	0.597
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	multiple_records_unresolved	116	0.116
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	unmapped	59	0.059
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	single_record_collinear_full_coverage	26	0.026
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	single_record_collinear_with_source_gaps	718	0.718
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	multiple_records_unresolved	197	0.197
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	unmapped	40	0.04
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	single_record_collinear_full_coverage	6	0.006
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	single_record_collinear_with_source_gaps	614	0.614
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	multiple_records_unresolved	340	0.34
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	unmapped	317	0.317
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	single_record_collinear_full_coverage	597	0.597
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	single_record_collinear_with_source_gaps	86	0.086
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	multiple_records_unresolved	0	0.0
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	unmapped	263	0.263
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	single_record_collinear_full_coverage	533	0.533
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	single_record_collinear_with_source_gaps	196	0.196
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	multiple_records_unresolved	8	0.008
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	unmapped	219	0.219
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	single_record_collinear_full_coverage	403	0.403
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	single_record_collinear_with_source_gaps	362	0.362
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	multiple_records_unresolved	16	0.016
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	unmapped	199	0.199
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	single_record_collinear_full_coverage	190	0.19
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	single_record_collinear_with_source_gaps	555	0.555
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	multiple_records_unresolved	56	0.056
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	unmapped	114	0.114
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	single_record_collinear_full_coverage	46	0.046
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	single_record_collinear_with_source_gaps	703	0.703
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	multiple_records_unresolved	137	0.137
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	unmapped	69	0.069
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	single_record_collinear_full_coverage	6	0.006
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	single_record_collinear_with_source_gaps	722	0.722
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	multiple_records_unresolved	203	0.203
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	invalid_or_ambiguous	0	0.0

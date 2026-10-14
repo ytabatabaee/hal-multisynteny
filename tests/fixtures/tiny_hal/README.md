@@ -43,3 +43,14 @@ alignment, and a split/gapped interval represented by multiple shorter rows.
 Genuine paralogous duplication in HAL imported from tiny hand-written MAF is not
 currently treated as established; the manifest records this as an expected
 limitation rather than simulating it as a real-HAL duplication.
+
+The separate `psl-orientation.maf` and `psl-orientation.bed` fixture validates
+actual `halLiftover --outPSLWithName` strand/order semantics without changing the
+existing four-leaf fixture. Cactus 3.3.0's HAL v2.2 emits `++`, `+-`, `-+`,
+and `--` on these inputs. The 812-byte `psl-orientation.expected.psl` capture
+contains forward/reverse multi-component records and separate records caused
+by orientation and target-chromosome changes. The HAL test reimports the MAF,
+runs liftover, compares the raw capture, and checks normalized coordinates.
+The unmarked parser tests also exercise the captured records. See
+[`PSL_DIAGNOSTIC_SEMANTICS.md`](../../../docs/PSL_DIAGNOSTIC_SEMANTICS.md)
+for interpretation and the remaining alternative/path grouping limitation.

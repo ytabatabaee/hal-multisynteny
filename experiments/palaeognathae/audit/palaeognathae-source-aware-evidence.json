@@ -1,0 +1,45 @@
+{
+  "edges": [
+    {
+      "edge": "GCF_028389875.1-to-PalaeognathaeAnc2",
+      "fragments_sha256": "35c899cd28fd373f8d1ba5a1e934c41ad86c5bb42028990df4dac921b8cc7822",
+      "hal_sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+      "raw_psl_file": "GCF_028389875.1-to-PalaeognathaeAnc2.raw.psl",
+      "raw_psl_sha256": "97c3587267a10de2c24f7ac8d7410b9d85f66bea929ddb0523eb18668974526c",
+      "sampled_blocks_file": "GCF_028389875.1__GCF_028389875.1__to__PalaeognathaeAnc2.blocks.tsv",
+      "sampled_blocks_sha256": "7781115411e6b1853feab786842a113d1cf6b217701e781306e3136a48d9b54a",
+      "summary_sha256": "b4cad40ffc44f65d4537dfe72eb584ca4269daf9ce89aef7ba22f27864a25600"
+    },
+    {
+      "edge": "PalaeognathaeAnc1-to-PalaeognathaeAnc0",
+      "fragments_sha256": "2b6ae828dec0afb5c2e3a499996d71525310e99abdae9b6c7e3b7e1daf682da7",
+      "hal_sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+      "raw_psl_file": "PalaeognathaeAnc1-to-PalaeognathaeAnc0.raw.psl",
+      "raw_psl_sha256": "63ca2004e079b2815d1790dff211dcc2142cb8d50166f74e7c4d81194e3e40aa",
+      "sampled_blocks_file": "PalaeognathaeAnc1__PalaeognathaeAnc1__to__PalaeognathaeAnc0.blocks.tsv",
+      "sampled_blocks_sha256": "dc40edf971b7c591298d9f33bb0a96d578a189787658e1e09563a2a93d608fd8",
+      "summary_sha256": "15de726b1d6b0a59e58e90294b13311ee3d29fe372e9e9976e577fde4cf5f99c"
+    },
+    {
+      "edge": "PalaeognathaeAnc2-to-PalaeognathaeAnc1",
+      "fragments_sha256": "9019bff560396ecf5b03b6fc56c66a8e19fa0295e73ae23ae18d42269a352b11",
+      "hal_sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+      "raw_psl_file": "PalaeognathaeAnc2-to-PalaeognathaeAnc1.raw.psl",
+      "raw_psl_sha256": "81c328e8891ad0455b171c799f7d7d990684f82d178b0d43f6084c67b76483e4",
+      "sampled_blocks_file": "PalaeognathaeAnc2__PalaeognathaeAnc2__to__PalaeognathaeAnc1.blocks.tsv",
+      "sampled_blocks_sha256": "77004c05d66a78bb4eaef924de8640c01612690233ae089e612a0dff0a2e7c52",
+      "summary_sha256": "a3cc5d2e954a651d36bed2d0fa2f04128fd07837f0e2b9f37b47f893e3bac21e"
+    },
+    {
+      "edge": "PalaeognathaeAnc3-to-PalaeognathaeAnc2",
+      "fragments_sha256": "9001df7a9494195cbb0493614b2ceb7d587f8ff66c2f96e6a0779fea908add36",
+      "hal_sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+      "raw_psl_file": "PalaeognathaeAnc3-to-PalaeognathaeAnc2.raw.psl",
+      "raw_psl_sha256": "217c70094527df2d2c46f74b2d7b4e9ff5e7bc627641a1fa0c2b28bb21c28be6",
+      "sampled_blocks_file": "PalaeognathaeAnc3__PalaeognathaeAnc3__to__PalaeognathaeAnc2.blocks.tsv",
+      "sampled_blocks_sha256": "294622c4110e7c939d86983d96742f22c184b23dbbbc3acb5ec75a15bf4b80f6",
+      "summary_sha256": "d61a6975227cca917bc010421a4d811567d2f094a521cbae0fd07440a52ed0c7"
+    }
+  ],
+  "method": "reparse preserved raw PSL; no HAL/BED6 rerun"
+}

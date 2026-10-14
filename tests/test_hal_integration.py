@@ -262,3 +262,53 @@ def test_tiny_hal_sampled_audit_workflow(tiny_hal_manifest, tmp_path):
     }
     decision = assess_audit(tmp_path / "tiny-hal.summary.json", tmp_path / "tiny-hal.readiness.md")
     assert decision == "CONDITIONAL"
+
+
+def test_real_hal_psl_orientation_and_record_boundaries(tmp_path):
+    """Import controlled MAF and check actual HAL writer output, not a PSL generator."""
+    from hal_multisynteny.audit import AuditBlock
+    from hal_multisynteny.source_diagnostic import classify_source_mapping, read_source_psl
+
+    if not shutil.which("maf2hal") or not shutil.which("halLiftover"):
+        pytest.skip("HAL command-line tools are not installed")
+    hal = tmp_path / "orientation.hal"
+    raw = tmp_path / "orientation.psl"
+    subprocess.run([
+        "maf2hal", str(DEFAULT_FIXTURE / "psl-orientation.maf"), str(hal),
+        "--refGenome", "PSL_parent", "--targetGenomes", "PSL_child",
+    ], check=True, capture_output=True, text=True)
+    subprocess.run([
+        "halLiftover", "--outPSLWithName", str(hal), "PSL_child",
+        str(DEFAULT_FIXTURE / "psl-orientation.bed"), "PSL_parent", str(raw),
+    ], check=True, capture_output=True, text=True)
+    grouped = read_source_psl(raw)
+    # A compact golden capture is retained so non-HAL CI also checks real records.
+    assert sorted(raw.read_text().splitlines()) == sorted(
+        (DEFAULT_FIXTURE / "psl-orientation.expected.psl").read_text().splitlines()
+    )
+    for name, expected in {
+        "forward": ("++", "+", [(0, 10, 0, 10)]),
+        "reverse_multi": ("+-", "-", [(10, 20, 60, 70), (20, 30, 40, 50), (30, 40, 20, 30)]),
+        "forward_gapped": ("++", "+", [(60, 70, 80, 90), (80, 90, 100, 110)]),
+        "reverse_query_negative": ("-+", "-", [(10, 20, 60, 70), (20, 30, 40, 50), (30, 40, 20, 30)]),
+        "forward_query_negative": ("--", "+", [(60, 70, 80, 90), (80, 90, 100, 110)]),
+    }.items():
+        records = grouped[name]
+        assert len(records) == 1
+        components = records[0].components
+        strand, relative, coordinates = expected
+        assert {c.raw_strand_field for c in components} == {strand}
+        assert {c.relative_orientation for c in components} == {relative}
+        assert [(c.q_start, c.q_end, c.t_start, c.t_end) for c in components] == coordinates
+        fields = records[0].raw.split("\t")
+        if name == "reverse_multi":
+            assert fields[20:] == ["10,20,30,", "50,70,90,"]
+        block = AuditBlock(name, "chrQ", min(c.q_start for c in components), max(c.q_end for c in components))
+        category = "single_record_collinear_with_source_gaps" if "forward_" in name and name != "forward" else "single_record_collinear_full_coverage"
+        assert classify_source_mapping(block, records)["classification"] == category
+    orientation = classify_source_mapping(AuditBlock("orientation_change", "chrQ", 0, 40), grouped["orientation_change"])
+    assert orientation["classification"] == "multiple_records_unresolved"
+    assert orientation["multiple_relative_orientations_observed"] == "true"
+    chromosome = classify_source_mapping(AuditBlock("chromosome_change", "chrQ", 80, 100), grouped["chromosome_change"])
+    assert chromosome["classification"] == "multiple_records_unresolved"
+    assert chromosome["multiple_target_chromosomes_observed"] == "true"

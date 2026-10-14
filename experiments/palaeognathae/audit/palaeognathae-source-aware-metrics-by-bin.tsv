@@ -1,0 +1,25 @@
+edge	scope	length_bin	input_interval_count	psl_record_count	component_count	mapped_source_bases	uncovered_source_bases	excess_source_coverage_bases	leading_uncovered_source_bases	internal_uncovered_source_bases	trailing_uncovered_source_bases	input_source_bases	intervals_with_zero_psl_record	intervals_with_one_psl_record	intervals_with_multiple_psl_records	intervals_with_overlapping_record_source_coverage	intervals_with_disjoint_record_source_coverage	intervals_with_multiple_target_chromosomes	intervals_with_multiple_relative_orientations	intervals_with_jointly_collinear_records
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	50-99	1000	472	986	32268	42534	0	40654	1511	369	74802	528	472	0	0	0	0	0	472
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	100-499	1000	485	2559	122276	170476	0	156886	10030	3560	292752	516	483	1	0	1	1	0	483
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	500-999	1000	528	5893	326070	425703	0	378593	35668	11442	751773	481	511	8	0	8	7	2	511
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	1000-4999	1000	600	23527	1362396	1629826	0	1333252	245463	51111	2992222	446	519	35	0	35	30	14	519
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	5000-9999	1000	651	55454	3129882	4318150	0	3463790	763308	91052	7448032	460	472	68	0	68	56	31	472
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	10000-50000	1000	934	212965	12106280	16509728	0	13153048	3231746	124934	28616008	427	389	184	0	184	131	84	389
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	50-99	1000	831	1057	60548	13302	0	12662	335	305	73850	171	827	2	0	2	1	1	827
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	100-499	1000	864	1799	246480	49484	0	43111	3550	2823	295964	149	840	11	0	11	11	8	840
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	500-999	1000	927	3145	624852	112568	0	95163	8508	8897	737420	123	833	44	0	44	37	19	833
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	1000-4999	1000	1067	9641	2415489	279884	0	168228	75270	36386	2695373	65	837	98	0	98	87	44	837
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	5000-9999	1000	1261	24994	6823273	476081	0	195179	214456	66446	7299354	19	828	153	0	153	112	58	828
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	10000-50000	1000	1611	83696	25385253	1213880	0	279117	837833	96930	26599133	6	694	300	0	300	181	87	694
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	50-99	1000	741	971	54049	20332	0	19619	469	244	74381	264	732	4	0	4	2	0	732
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	100-499	1000	821	1783	235138	60472	0	54344	2892	3236	295610	195	793	12	0	12	11	6	793
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	500-999	1000	882	3292	593947	154982	0	124885	14891	15206	748929	160	804	36	0	36	32	15	804
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	1000-4999	1000	1061	9878	2199748	482859	0	321743	107559	53557	2682607	122	762	116	0	116	107	63	762
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	5000-9999	1000	1295	24979	6176988	1106996	0	577074	399515	130407	7283984	59	744	197	0	197	170	95	744
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	10000-50000	1000	1970	88225	23730557	2579458	0	954014	1471396	154048	26310015	40	620	340	0	340	301	202	620
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	50-99	1000	683	866	50135	23998	0	23227	421	350	74133	317	683	0	0	0	0	0	683
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	100-499	1000	747	1555	213627	83510	0	77948	3352	2210	297137	263	729	8	0	8	7	5	729
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	500-999	1000	801	3031	541936	207313	0	177249	12326	17738	749249	219	765	16	0	16	12	8	765
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	1000-4999	1000	878	8281	1884334	708116	0	518329	109813	79974	2592450	199	745	56	0	56	42	29	745
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	5000-9999	1000	1093	20538	5719517	1517668	0	878976	419070	219622	7237185	114	749	137	0	137	119	69	749
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	10000-50000	1000	1349	68075	21955306	4374431	0	2000261	2025596	348574	26329737	69	728	203	0	203	160	111	728
