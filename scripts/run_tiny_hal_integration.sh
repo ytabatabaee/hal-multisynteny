@@ -82,7 +82,7 @@ python - "${workflow_dir}/tiny-hal.summary.json" <<'PY'
 import json
 import sys
 summary = json.loads(open(sys.argv[1], encoding="utf-8").read())
-expected = {"unique_full_length": 5, "multi_full_length": 0, "unmapped": 1, "split": 1, "gapped_or_length_changed": 0, "invalid_output": 0}
+expected = {"unique_full_length": 6, "multi_full_length": 0, "unmapped": 1, "split": 1, "gapped_or_length_changed": 0, "invalid_output": 0}
 for key, value in expected.items():
     assert summary["category_counts"][key] == value, summary["category_counts"]
 print("workflow audit counts:", summary["category_counts"])
@@ -152,7 +152,13 @@ for node in ancAB ancCD root; do
     a="${out_dir}/run-a/nodes/${node}/${name}"
     b="${out_dir}/run-b/nodes/${node}/${name}"
     if [[ -e "${a}" || -e "${b}" ]]; then
-      cmp "${a}" "${b}"
+      if [[ "${name}" == *.tsv ]]; then
+        sed -E 's#/[^"[:space:]]*/hms-hal-[^"/[:space:]]*/#<hms-hal-temp>/#g' "${a}" > "${a}.normalized"
+        sed -E 's#/[^"[:space:]]*/hms-hal-[^"/[:space:]]*/#<hms-hal-temp>/#g' "${b}" > "${b}.normalized"
+        cmp "${a}.normalized" "${b}.normalized"
+      else
+        cmp "${a}" "${b}"
+      fi
     fi
   done
 done

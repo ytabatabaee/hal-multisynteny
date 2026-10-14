@@ -118,7 +118,12 @@ def _parse_genomes(text: str) -> list[str]:
 def _parse_sequence_lengths(text: str) -> dict[str, int]:
     lengths: dict[str, int] = {}
     for raw in text.splitlines():
+        if "," in raw:
+            parts = [part.strip() for part in raw.split(",")]
+            if len(parts) >= 2 and parts[1].isdigit():
+                lengths[parts[0]] = int(parts[1])
+            continue
         parts = raw.split()
-        if len(parts) >= 2 and parts[-1].isdigit():
-            lengths[parts[0]] = int(parts[-1])
+        if len(parts) >= 2 and parts[1].isdigit():
+            lengths[parts[0]] = int(parts[1])
     return lengths

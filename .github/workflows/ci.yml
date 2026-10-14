@@ -44,7 +44,7 @@ jobs:
           create-args: >-
             python=3.12
             pip
-            hal=2.3.0
+            cactus=3.3.0
       - name: Install package
         shell: bash -el {0}
         run: |
@@ -53,9 +53,9 @@ jobs:
       - name: Confirm HAL tools
         shell: bash -el {0}
         run: |
-          micromamba list -n hal-ci hal
-          micromamba run -n hal-ci bash -lc 'command -v halStats && command -v halLiftover && command -v maf2hal'
-          micromamba run -n hal-ci bash -lc 'halStats --version || true; halLiftover --version || true; maf2hal --version || true'
+          micromamba list -n hal-ci cactus
+          micromamba run -n hal-ci bash -lc 'command -v halStats && command -v halLiftover && command -v halSynteny && command -v maf2hal'
+          micromamba run -n hal-ci bash -lc 'halStats --version || true; halLiftover --version || true; halSynteny --version || true; maf2hal --version || true'
       - name: Build tiny HAL fixture
         shell: bash -el {0}
         run: micromamba run -n hal-ci scripts/build_tiny_hal_fixture.sh

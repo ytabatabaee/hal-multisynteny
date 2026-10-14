@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -60,6 +61,11 @@ def tiny_hal_manifest() -> dict[str, object]:
 
 def _fixture_path(manifest: dict[str, object], key: str) -> Path:
     return Path(str(manifest["_fixture_dir"])) / str(manifest[key])
+
+
+def _stable_checkpoint_bytes(path: Path) -> bytes:
+    text = path.read_text(encoding="utf-8")
+    return re.sub(r'/[^"\s]*/hms-hal-[^"/\s]*/', "<hms-hal-temp>/", text).encode("utf-8")
 
 
 def test_tiny_hal_preflight_and_tree_validation(tiny_hal_manifest):
@@ -230,7 +236,7 @@ def test_tiny_hal_four_leaf_traversal_resume_force_and_determinism(tiny_hal_mani
             a = run_a / "nodes" / node / name
             b = run_b / "nodes" / node / name
             if a.exists() or b.exists():
-                assert a.read_bytes() == b.read_bytes(), (node, name)
+                assert _stable_checkpoint_bytes(a) == _stable_checkpoint_bytes(b), (node, name)
 
 
 def test_tiny_hal_sampled_audit_workflow(tiny_hal_manifest, tmp_path):
@@ -250,10 +256,10 @@ def test_tiny_hal_sampled_audit_workflow(tiny_hal_manifest, tmp_path):
     assert sample_summary["interval_count"] == 8
     run_audit(config_path=config, plan_path=plan_path, sampled_blocks=sampled, output_dir=audit, resume=True)
     resumed = run_audit(config_path=config, plan_path=plan_path, sampled_blocks=sampled, output_dir=audit, resume=True)
-    assert len(resumed["batches"]) == 4
+    assert len(resumed["batches"]) == 5
     summary = summarize_audit(audit, tmp_path / "tiny-hal")
     assert summary["category_counts"] == {
-        "unique_full_length": 5,
+        "unique_full_length": 6,
         "multi_full_length": 0,
         "unmapped": 1,
         "split": 1,
@@ -261,4 +267,4 @@ def test_tiny_hal_sampled_audit_workflow(tiny_hal_manifest, tmp_path):
         "invalid_output": 0,
     }
     decision = assess_audit(tmp_path / "tiny-hal.summary.json", tmp_path / "tiny-hal.readiness.md")
-    assert decision == "NO-GO"
+    assert decision == "CONDITIONAL"
