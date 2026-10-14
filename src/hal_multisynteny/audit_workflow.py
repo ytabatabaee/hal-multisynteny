@@ -114,6 +114,9 @@ def _validate_config(config: dict[str, object]) -> None:
         raise AuditWorkflowError(f"audit config missing fields: {', '.join(missing)}")
     if not isinstance(config["leaves"], list) or not config["leaves"]:
         raise AuditWorkflowError("audit config requires at least one leaf")
+    edge_scope = str(config.get("edge_scope", "configured"))
+    if edge_scope not in {"configured", "all_direct_edges"}:
+        raise AuditWorkflowError("edge_scope must be 'configured' or 'all_direct_edges'")
     seen_logical: set[str] = set()
     seen_hal: set[str] = set()
     for leaf in config["leaves"]:
@@ -159,18 +162,43 @@ def _validate_config(config: dict[str, object]) -> None:
 def plan_audit(config_path: str | Path, output_path: str | Path) -> dict[str, object]:
     config = read_config(config_path)
     leaves = config["leaves"]
-    requested = sorted({str(config["clade_root"]), *(str(leaf["hal_genome"]) for leaf in leaves)})
+    root = str(config["clade_root"])
+    requested = sorted({root, *(str(leaf["hal_genome"]) for leaf in leaves)})
+    if str(config.get("edge_scope", "configured")) == "all_direct_edges":
+        # Inspect the complete HAL tree before selecting descendants. This makes the
+        # scope independent of the configured extant leaves while retaining the old
+        # configured behavior as the default.
+        requested = []
     info = inspect_hal(config["hal"], required_genomes=requested, metadata_level="basic")
     parent_map = info["parent_map"]
     sequence_lengths = info["sequence_lengths"]
+    genomes = set(info["genomes"])
+    if root not in genomes:
+        raise AuditWorkflowError(f"clade root {root!r} is not present in HAL")
+    if str(config.get("edge_scope", "configured")) == "all_direct_edges":
+        descendants: list[str] = []
+        for genome in sorted(genomes - {root}):
+            current = genome
+            seen: set[str] = set()
+            while current != root:
+                if current in seen:
+                    raise AuditWorkflowError(f"cycle in HAL parent map involving {current!r}")
+                seen.add(current)
+                current = parent_map.get(current, "")
+                if not current:
+                    break
+            if current == root:
+                descendants.append(genome)
+        # Fetch lengths for every descendant selected from the HAL tree.
+        info = inspect_hal(config["hal"], required_genomes=sorted({root, *descendants}), metadata_level="basic")
+        parent_map = info["parent_map"]
+        sequence_lengths = info["sequence_lengths"]
+        leaves = [{"logical_name": genome, "hal_genome": genome} for genome in descendants]
     edges: list[dict[str, object]] = []
     for leaf in leaves:
         child_hal = str(leaf["hal_genome"])
         parent = parent_map.get(child_hal)
-        if not parent:
-            raise AuditWorkflowError(f"HAL genome {child_hal!r} has no direct parent in HAL tree")
-        if parent not in info["genomes"]:
-            raise AuditWorkflowError(f"parent genome {parent!r} for {child_hal!r} is not present")
+        validate_direct_edge(child_hal, parent, parent_map, genomes)
         edge_id = f"{leaf['logical_name']}__{child_hal}__to__{parent}".replace("/", "_")
         edges.append(
             {
@@ -181,6 +209,7 @@ def plan_audit(config_path: str | Path, output_path: str | Path) -> dict[str, ob
                 "sequence_lengths": sequence_lengths.get(child_hal, {}),
             }
         )
+    edges.sort(key=lambda edge: (str(edge["child_hal_genome"]), str(edge["parent_hal_genome"])))
     intervals_per_bin = int(config["sampling"].get("intervals_per_length_bin", 0))
     requested_intervals = len(edges) * len(config["sampling"]["length_bins"]) * intervals_per_bin
     batch_size = int(config["execution"].get("batch_size", 1000))
@@ -205,6 +234,26 @@ def plan_audit(config_path: str | Path, output_path: str | Path) -> dict[str, ob
     }
     _write_json_atomic(Path(output_path), plan)
     return plan
+
+
+def validate_direct_edge(
+    child_genome: str,
+    parent_genome: str | None,
+    parent_map: dict[str, str],
+    genomes: Iterable[str],
+) -> None:
+    """Validate a requested HAL child-to-parent edge using HAL metadata."""
+    available = set(genomes)
+    if child_genome not in available:
+        raise AuditWorkflowError(f"HAL genome {child_genome!r} is not present")
+    if not parent_genome or parent_genome not in available:
+        raise AuditWorkflowError(f"parent genome {parent_genome!r} for {child_genome!r} is not present")
+    actual = parent_map.get(child_genome)
+    if actual != parent_genome:
+        raise AuditWorkflowError(
+            f"requested edge {child_genome!r} -> {parent_genome!r} is not a direct HAL edge "
+            f"(actual parent: {actual!r})"
+        )
 
 
 def _public_config(config: dict[str, object]) -> dict[str, object]:

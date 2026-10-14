@@ -1,0 +1,43 @@
+group	scope	length_bin	classification	count	fraction
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	all	unique_contiguous	250	0.041666666666666664
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	all	split_collinear	179	0.029833333333333333
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	all	split_with_source_gaps	2417	0.4028333333333333
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	all	rearranged_or_orientation_conflict	0	0.0
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	all	multi_mapping_or_duplication	296	0.04933333333333333
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	all	unmapped	2858	0.47633333333333333
+GCF_028389875.1-to-PalaeognathaeAnc2	extant leaf edge	all	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	all	unique_contiguous	1438	0.23966666666666667
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	all	split_collinear	747	0.1245
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	all	split_with_source_gaps	2674	0.44566666666666666
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	all	rearranged_or_orientation_conflict	0	0.0
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	all	multi_mapping_or_duplication	608	0.10133333333333333
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	all	unmapped	533	0.08883333333333333
+PalaeognathaeAnc1-to-PalaeognathaeAnc0	internal ancestor edge	all	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	all	unique_contiguous	1409	0.23483333333333334
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	all	split_collinear	388	0.06466666666666666
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	all	split_with_source_gaps	2658	0.443
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	all	rearranged_or_orientation_conflict	0	0.0
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	all	multi_mapping_or_duplication	705	0.1175
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	all	unmapped	840	0.14
+PalaeognathaeAnc2-to-PalaeognathaeAnc1	internal ancestor edge	all	invalid_or_ambiguous	0	0.0
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	all	unique_contiguous	1295	0.21583333333333332
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	all	split_collinear	480	0.08
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	all	split_with_source_gaps	2624	0.43733333333333335
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	all	rearranged_or_orientation_conflict	0	0.0
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	all	multi_mapping_or_duplication	420	0.07
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	all	unmapped	1181	0.19683333333333333
+PalaeognathaeAnc3-to-PalaeognathaeAnc2	internal ancestor edge	all	invalid_or_ambiguous	0	0.0
+extant leaf edge	extant leaf edge	all	unique_contiguous	250	0.041666666666666664
+extant leaf edge	extant leaf edge	all	split_collinear	179	0.029833333333333333
+extant leaf edge	extant leaf edge	all	split_with_source_gaps	2417	0.4028333333333333
+extant leaf edge	extant leaf edge	all	rearranged_or_orientation_conflict	0	0.0
+extant leaf edge	extant leaf edge	all	multi_mapping_or_duplication	296	0.04933333333333333
+extant leaf edge	extant leaf edge	all	unmapped	2858	0.47633333333333333
+extant leaf edge	extant leaf edge	all	invalid_or_ambiguous	0	0.0
+internal ancestor edge	internal ancestor edge	all	unique_contiguous	4142	0.2301111111111111
+internal ancestor edge	internal ancestor edge	all	split_collinear	1615	0.08972222222222222
+internal ancestor edge	internal ancestor edge	all	split_with_source_gaps	7956	0.442
+internal ancestor edge	internal ancestor edge	all	rearranged_or_orientation_conflict	0	0.0
+internal ancestor edge	internal ancestor edge	all	multi_mapping_or_duplication	1733	0.09627777777777778
+internal ancestor edge	internal ancestor edge	all	unmapped	2554	0.1418888888888889
+internal ancestor edge	internal ancestor edge	all	invalid_or_ambiguous	0	0.0

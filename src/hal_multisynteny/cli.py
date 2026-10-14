@@ -34,6 +34,7 @@ from .io import (
 )
 from .reconcile import ReconcileConfig, checksum, reconcile_node
 from .runner import RunTreeConfig, init_leaf_packages, run_tree
+from .source_diagnostic import source_aware_liftover
 from .tree import build_traversal_plan
 
 
@@ -276,6 +277,18 @@ def _audit_liftover(args: argparse.Namespace) -> int:
     return 0
 
 
+def _audit_source_aware(args: argparse.Namespace) -> int:
+    summary = source_aware_liftover(
+        hal_path=args.hal,
+        child_genome=args.child_genome,
+        parent_genome=args.parent_genome,
+        blocks_path=args.blocks,
+        output_prefix=args.output_prefix,
+    )
+    print(f"audited {summary['blocks']} block(s): " + ", ".join(f"{key}={value}" for key, value in summary["classifications"].items()))
+    return 0
+
+
 def _plan_audit(args: argparse.Namespace) -> int:
     plan = plan_audit(args.config, args.output)
     print(
@@ -414,6 +427,14 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--blocks", required=True)
     audit.add_argument("--output-prefix", required=True)
     audit.set_defaults(func=_audit_liftover)
+
+    source_audit = subparsers.add_parser("audit-source-aware", help="audit source-aware PSL liftover fragments")
+    source_audit.add_argument("--hal", required=True)
+    source_audit.add_argument("--child-genome", required=True)
+    source_audit.add_argument("--parent-genome", required=True)
+    source_audit.add_argument("--blocks", required=True)
+    source_audit.add_argument("--output-prefix", required=True)
+    source_audit.set_defaults(func=_audit_source_aware)
 
     plan = subparsers.add_parser("plan-audit", help="plan a direct-edge HAL liftover audit")
     plan.add_argument("--config", required=True)

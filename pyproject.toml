@@ -36,6 +36,12 @@ Issues = "https://github.com/ytabatabaee/hal-multisynteny/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/hal_multisynteny"]
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/data/cache/",
+  "/experiments/**/results*/",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"

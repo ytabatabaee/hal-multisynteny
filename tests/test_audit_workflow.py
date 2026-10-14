@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from hal_multisynteny import audit_workflow
 from hal_multisynteny.audit_workflow import (
     AuditWorkflowError,
     assess_audit,
@@ -12,6 +13,7 @@ from hal_multisynteny.audit_workflow import (
     run_audit,
     sample_intervals,
     summarize_audit,
+    validate_direct_edge,
 )
 
 
@@ -105,6 +107,45 @@ def test_plan_audit_validates_direct_edges_and_sequence_lengths(tmp_path, monkey
     assert plan["requested_interval_count"] == 12
     with pytest.raises(Exception, match="missing requested genome"):
         plan_audit(write_config(tmp_path / "bad", bad_genome=True), tmp_path / "bad-plan.json")
+
+
+def test_all_direct_edge_scope_is_deterministic_and_validates_edges(tmp_path, monkeypatch):
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    write_fake_hal_tools(tools)
+    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ.get('PATH', '')}")
+    config = json.loads(write_config(tmp_path).read_text(encoding="utf-8"))
+    config["edge_scope"] = "all_direct_edges"
+    path = tmp_path / "all.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    plan = plan_audit(path, tmp_path / "all-plan.json")
+    assert [(row["child_hal_genome"], row["parent_hal_genome"]) for row in plan["edges"]] == [
+        ("HAL_A", "HAL_root"), ("HAL_B", "HAL_root")
+    ]
+    with pytest.raises(AuditWorkflowError, match="not a direct"):
+        validate_direct_edge("HAL_A", "HAL_B", {"HAL_A": "HAL_root"}, {"HAL_A", "HAL_B", "HAL_root"})
+
+
+def test_all_direct_scope_enumerates_internal_ancestors(monkeypatch, tmp_path):
+    config = json.loads(write_config(tmp_path).read_text(encoding="utf-8"))
+    config["edge_scope"] = "all_direct_edges"
+    path = tmp_path / "internal.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    info = {
+        "hal_path": str(tmp_path / "toy.hal"),
+        "hal_sha256": "hal",
+        "hal_size": 1,
+        "genomes": ["HAL_A", "HAL_B", "HAL_mid", "HAL_root"],
+        "parent_map": {"HAL_A": "HAL_mid", "HAL_B": "HAL_mid", "HAL_mid": "HAL_root"},
+        "sequence_lengths": {},
+        "tools": {},
+    }
+    info["sequence_lengths"] = {genome: {"chr": 100} for genome in info["genomes"]}
+    monkeypatch.setattr(audit_workflow, "inspect_hal", lambda *args, **kwargs: info)
+    plan = plan_audit(path, tmp_path / "internal-plan.json")
+    assert [(edge["child_hal_genome"], edge["parent_hal_genome"]) for edge in plan["edges"]] == [
+        ("HAL_A", "HAL_mid"), ("HAL_B", "HAL_mid"), ("HAL_mid", "HAL_root")
+    ]
 
 
 def test_sample_intervals_is_deterministic_and_bounded(tmp_path, monkeypatch):

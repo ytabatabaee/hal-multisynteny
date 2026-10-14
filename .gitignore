@@ -10,6 +10,7 @@ dist/
 tests/fixtures/tiny_hal/build/
 tiny-hal-output/
 hal-ci-output/
+experiments/palaeognathae/audit/results-all-direct/
 
 # Local tooling and IDE metadata
 .tools/
