@@ -22,6 +22,13 @@ class ExtractionError(RuntimeError):
     """Raised when edge extraction cannot produce strict parent-mapped runs."""
 
 
+HAL_BACKENDS = frozenset({"hal", "hal-psl-conservative"})
+
+
+def is_hal_backend(backend: str) -> bool:
+    return backend in HAL_BACKENDS
+
+
 @dataclass(frozen=True, slots=True)
 class HalSyntenyLeafResult:
     blocks: tuple[NodeBlock, ...]
@@ -219,6 +226,7 @@ class EdgeExtractionResult:
     tool_versions: dict[str, str]
     commands: tuple[tuple[str, ...], ...]
     warnings: tuple[str, ...] = ()
+    artifacts: tuple[tuple[str, str], ...] = ()
 
 
 class EdgeExtractor(Protocol):
@@ -321,14 +329,14 @@ class FakeEdgeExtractor:
 
     @staticmethod
     def _read(path: Path) -> tuple[EdgeMappingRun, ...]:
-        from .io import EDGE_MAPPING_FIELDS
+        from .io import EDGE_MAPPING_CORE_FIELDS
 
         records: list[EdgeMappingRun] = []
         with path.open(newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle, delimiter="\t")
             if reader.fieldnames is None:
                 raise ExtractionError("fake mapping table has no header")
-            missing = sorted(set(EDGE_MAPPING_FIELDS) - set(reader.fieldnames))
+            missing = sorted(set(EDGE_MAPPING_CORE_FIELDS) - set(reader.fieldnames))
             if missing:
                 raise ExtractionError(f"fake mapping table missing columns: {', '.join(missing)}")
             for line_number, row in enumerate(reader, start=2):
@@ -351,6 +359,12 @@ class FakeEdgeExtractor:
                             row["source_anchor_id"],
                             row["tool"],
                             row["command"],
+                            row.get("hypothesis_id", ""),
+                            row.get("query_strand", ""),
+                            row.get("target_strand_explicit", ""),
+                            row.get("raw_strand_field", ""),
+                            int(row.get("psl_line_number") or 0),
+                            int(row.get("component_order") or 0),
                         )
                     )
                 except ValueError as exc:

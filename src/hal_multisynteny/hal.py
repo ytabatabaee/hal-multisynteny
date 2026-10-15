@@ -101,7 +101,7 @@ def _parse_parent_map(tree_text: str) -> dict[str, str]:
 
     for raw in tree_text.splitlines():
         if raw.strip().endswith(";"):
-            visit(parse_newick(raw.strip()))
+            visit(parse_newick(raw.strip(), require_binary=False))
             return parent
     return parent
 

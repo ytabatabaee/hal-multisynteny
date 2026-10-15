@@ -197,7 +197,7 @@ def test_four_leaf_fake_tree_end_to_end_resume_force_and_dry_run(tmp_path):
     assert {row.leaf for row in leaf_occurrences} == {"A", "B", "C", "D"}
     assert all(row.node == "root" and row.node_start == 0 and row.node_end == 100 for row in leaf_occurrences)
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["schema_version"] == "0.4.0"
+    assert manifest["schema_version"] == "0.5.0"
     first_bytes = {path.name: path.read_bytes() for path in sorted(root.iterdir()) if path.is_file()}
 
     run_tree(
@@ -550,8 +550,16 @@ def write_fake_hal_tools(bin_dir: Path, *, tree_text: str, genomes: str) -> None
     liftover.write_text(
         "#!/usr/bin/env python3\n"
         "import sys\n"
-        "if '--version' in sys.argv:\n"
+        "if '--version' in sys.argv or '--help' in sys.argv:\n"
         "    print('fake-halLiftover 1.0')\n"
+        "elif '--outPSLWithName' in sys.argv:\n"
+        "    inp, out = sys.argv[4], sys.argv[6]\n"
+        "    with open(inp) as ih, open(out, 'w') as oh:\n"
+        "        for line in ih:\n"
+        "            chrom, start, end, name = line.split()[:4]\n"
+        "            size = str(int(end) - int(start))\n"
+        "            fields = [name, size, '0','0','0','0','0','0','0','++',chrom,'1000',start,end,'chr1','1000',start,end,'1',size+',',start+',',start+',']\n"
+        "            oh.write('\\t'.join(fields) + '\\n')\n"
         "else:\n"
         "    inp, out = sys.argv[3], sys.argv[5]\n"
         "    with open(inp, encoding='utf-8') as ih, open(out, 'w', encoding='utf-8') as oh:\n"
@@ -602,7 +610,8 @@ def test_hal_preflight_uses_node_map_and_rejects_bad_edges_before_mutation(tmp_p
     assert not output.exists()
 
 
-def test_halsynteny_leaf_init_without_leaf_blocks_runs_api_and_cli(tmp_path, monkeypatch):
+@pytest.mark.parametrize("backend", ["hal", "hal-psl-conservative"])
+def test_halsynteny_leaf_init_without_leaf_blocks_runs_api_and_cli(tmp_path, monkeypatch, backend):
     tree, node_map, _leaf_dir, _mappings = write_pilot_inputs(tmp_path)
     hal = tmp_path / "toy.hal"
     hal.write_text("fake HAL\n", encoding="utf-8")
@@ -633,7 +642,7 @@ def test_halsynteny_leaf_init_without_leaf_blocks_runs_api_and_cli(tmp_path, mon
     api_output = tmp_path / "automatic-api"
     run_tree(
         tree_path=tree, node_map_path=node_map, leaf_blocks=None, output_dir=api_output,
-        config=RunTreeConfig(backend="hal", hal=str(hal), leaf_init="halsynteny", min_block_length=1),
+        config=RunTreeConfig(backend=backend, hal=str(hal), leaf_init="halsynteny", min_block_length=1),
     )
     assert (api_output / "nodes" / "n1" / "COMPLETE").exists()
     assert (api_output / "node_statistics.tsv").exists()
@@ -662,7 +671,7 @@ def test_halsynteny_leaf_init_without_leaf_blocks_runs_api_and_cli(tmp_path, mon
     first_statistics = (api_output / "node_statistics.tsv").read_bytes()
     run_tree(
         tree_path=tree, node_map_path=node_map, leaf_blocks=None, output_dir=api_output,
-        config=RunTreeConfig(backend="hal", hal=str(hal), leaf_init="halsynteny", min_block_length=1, resume=True),
+        config=RunTreeConfig(backend=backend, hal=str(hal), leaf_init="halsynteny", min_block_length=1, resume=True),
     )
     assert (api_output / "node_statistics.tsv").read_bytes() == first_statistics
     assert counter.read_text(encoding="utf-8").splitlines() == ["run"] * 4
@@ -670,11 +679,11 @@ def test_halsynteny_leaf_init_without_leaf_blocks_runs_api_and_cli(tmp_path, mon
     with pytest.raises(CheckpointError, match="stale checkpoint"):
         run_tree(
             tree_path=tree, node_map_path=node_map, leaf_blocks=None, output_dir=api_output,
-            config=RunTreeConfig(backend="hal", hal=str(hal), leaf_init="halsynteny", min_block_length=1, resume=True),
+            config=RunTreeConfig(backend=backend, hal=str(hal), leaf_init="halsynteny", min_block_length=1, resume=True),
         )
     cli_output = tmp_path / "automatic-cli"
     assert main([
-        "run-tree", "--leaf-init", "halsynteny", "--backend", "hal", "--hal", str(hal),
+        "run-tree", "--leaf-init", "halsynteny", "--backend", backend, "--hal", str(hal),
         "--tree", str(tree), "--node-map", str(node_map), "--output-dir", str(cli_output),
         "--min-block-length", "1",
     ]) == 0

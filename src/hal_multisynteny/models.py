@@ -87,6 +87,7 @@ class ParentMappedRun:
     copy_id: str
     status: str
     source_anchor_id: str
+    hypothesis_id: str = ""
 
     def __post_init__(self) -> None:
         required = {
@@ -97,13 +98,14 @@ class ParentMappedRun:
             "chrom": self.chrom,
             "parent_node": self.parent_node,
             "parent_chrom": self.parent_chrom,
-            "copy_id": self.copy_id,
             "source_anchor_id": self.source_anchor_id,
         }
         empty = sorted(name for name, value in required.items() if not value.strip())
+        if not self.copy_id.strip() and not (self.status == "ambiguous" and self.hypothesis_id):
+            empty.append("copy_id")
         if empty:
             raise ValueError(f"empty required field(s): {', '.join(empty)}")
-        if any("\t" in value or "\n" in value for value in required.values()):
+        if any("\t" in value or "\n" in value for value in (*required.values(), self.copy_id)):
             raise ValueError("identity fields may not contain tabs or newlines")
         if self.start < 0 or self.parent_start < 0:
             raise ValueError("coordinates must be non-negative")
@@ -225,8 +227,16 @@ class EdgeMappingRun:
     source_anchor_id: str
     tool: str = ""
     command: str = ""
+    hypothesis_id: str = ""
+    query_strand: str = ""
+    target_strand_explicit: str = ""
+    raw_strand_field: str = ""
+    psl_line_number: int = 0
+    component_order: int = 0
 
     def __post_init__(self) -> None:
+        if self.hypothesis_id and self.status == "ambiguous" and self.copy_id:
+            raise ValueError("unresolved PSL hypotheses must not assign biological copy IDs")
         if self.child_start < 0 or self.parent_start < 0:
             raise ValueError("edge mapping coordinates must be non-negative")
         if self.child_end <= self.child_start or self.parent_end <= self.parent_start:
@@ -257,6 +267,7 @@ class EdgeMappingRun:
             copy_id=self.copy_id,
             status=self.status,
             source_anchor_id=self.source_anchor_id,
+            hypothesis_id=self.hypothesis_id,
         )
 
 

@@ -43,10 +43,11 @@ class TraversalPlan:
 
 
 class _Parser:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, *, require_binary: bool = True) -> None:
         self.text = text.strip()
         self.index = 0
         self.internal_index = 0
+        self.require_binary = require_binary
 
     def parse(self) -> TreeNode:
         if not self.text.endswith(";"):
@@ -78,7 +79,7 @@ class _Parser:
                     self.index += 1
                     break
                 raise TreeError("malformed Newick: expected ',' or ')'")
-            if len(children) != 2:
+            if self.require_binary and len(children) != 2:
                 raise TreeError("polytomies are not supported without an explicit resolution policy")
             label = self._label_or_none()
             node_id = label or self._next_internal_id()
@@ -115,8 +116,9 @@ class _Parser:
             self.index += 1
 
 
-def parse_newick(text: str) -> TreeNode:
-    return _Parser(text).parse()
+def parse_newick(text: str, *, require_binary: bool = True) -> TreeNode:
+    """Parse a binary guide tree, or unrestricted HAL metadata when requested."""
+    return _Parser(text, require_binary=require_binary).parse()
 
 
 def _leaves(node: TreeNode) -> tuple[TreeNode, ...]:

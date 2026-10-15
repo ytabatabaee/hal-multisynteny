@@ -491,6 +491,10 @@ def merge_decision(
         reason = conflict_reasons.get(classification)
         if reason and reason not in reasons:
             reasons.append(reason)
+    if ("ambiguous_evidence" not in reasons and
+        any(record.hypothesis_id and record.status == "ambiguous"
+            for record in previous.left + previous.right + current.left + current.right)):
+        reasons.append("ambiguous_evidence")
     if reasons:
         return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
                              False, "", tuple(reasons), gap, _child_gap_text(previous, current, "left"),
@@ -635,6 +639,10 @@ def _project_occurrences(
 ) -> list[ReconciledOccurrence]:
     grouped: dict[tuple[object, ...], list[_ProjectedPiece]] = defaultdict(list)
     for record in records:
+        if record.hypothesis_id and record.status == "ambiguous":
+            # PSL hypotheses provide spatial barriers, never biological tracks.
+            # Exact components and record identity remain in edge evidence.
+            continue
         side = "left" if record in left_runs else "right"
         piece = _project_run_to_parent_block(record, block_start, block_end)
         key = (
@@ -806,6 +814,10 @@ def reconcile_node(
         records = tuple(
             sorted({record for atom in group for record in atom.left + atom.right}, key=_record_sort_key)
         )
+        if any(record.hypothesis_id and record.status == "ambiguous" for record in records):
+            assert len(group) == 1 and group[0].classification in {"ambiguous", "complex"}, (
+                "unresolved PSL evidence must remain a single conflict atom"
+            )
         occurrences.extend(
             _project_occurrences(
                 block_id,

@@ -12,6 +12,24 @@ which pairwise blocks are insufficient.
 
 ## Algorithm
 
+An experimental `--backend hal-psl-conservative` is now available alongside
+the legacy BED6 `hal` backend. It uses the audited source-aware PSL parser on
+direct HAL edges: zero records are unaligned, one record supplies exact component
+runs, and multiple records remain ambiguous hypotheses. Ambiguous runs are merge
+barriers and are not propagated as biological occurrences. This supports controlled
+pipeline testing; it does not solve alternative-mapping resolution or establish
+readiness for full Palaeognathae reconstruction. See
+[backend architecture](docs/ARCHITECTURE.md#conservative-psl-edge-backend).
+
+```bash
+hal-multisynteny run-tree --backend hal-psl-conservative \
+  --leaf-init halsynteny --hal tiny.hal \
+  --tree tree.nwk --node-map node-map.tsv --output-dir psl-test \
+  --min-block-length 1 --hal-synteny-min-block-size 1
+```
+
+Checkpoint schema `0.5.0` rejects older checkpoints; use a fresh output directory.
+
 The input is a run-length table mapping collinear intervals in descendant
 genomes to one chosen ancestral genome in HAL. The builder:
 

@@ -312,3 +312,46 @@ def test_real_hal_psl_orientation_and_record_boundaries(tmp_path):
     chromosome = classify_source_mapping(AuditBlock("chromosome_change", "chrQ", 80, 100), grouped["chromosome_change"])
     assert chromosome["classification"] == "multiple_records_unresolved"
     assert chromosome["multiple_target_chromosomes_observed"] == "true"
+
+
+def test_tiny_hal_halsynteny_and_conservative_internal_edges(tiny_hal_manifest, tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from hal_multisynteny import psl_extract
+    from hal_multisynteny.io import read_edge_mapping_runs
+    from hal_multisynteny.runner import CheckpointError
+
+    if not shutil.which("halSynteny"):
+        pytest.skip("halSynteny is not installed")
+    config = RunTreeConfig(backend="hal-psl-conservative", hal=tiny_hal_manifest["_hal_path"],
+        leaf_init="halsynteny", min_block_length=1, hal_synteny_min_block_size=1)
+    args = {"tree_path": _fixture_path(tiny_hal_manifest, "tree"),
+            "node_map_path": _fixture_path(tiny_hal_manifest, "node_map"), "leaf_blocks": None}
+    out = tmp_path / "psl-tree"
+    run_tree(**args, output_dir=out, config=config)
+    root = load_package(out / "nodes/root", "root", "HAL_root")
+    assert root.blocks and {r.leaf for r in root.leaf_occurrences} == {"A", "B", "C", "D"}
+    assert root.manifest["edge_extractions"]["left"]["backend"] == "hal-psl-conservative"
+    assert root.manifest["run_identity"]["psl_extractor"]["parser_version"] == psl_extract.PSL_PARSER_VERSION
+    assert (root.path / "left_raw.psl").read_text()
+    assert "left_raw.psl" in root.manifest["output_checksums"]
+    runs = read_edge_mapping_runs(root.path / "left_edge_runs.tsv")
+    assert runs and all(r.hypothesis_id and r.raw_strand_field for r in runs)
+    first = load_package(out / "nodes/ancAB", "ancAB", "HAL_ancAB")
+    assert first.manifest["edge_extractions"]["left"]["backend"] == "halSynteny-leaf"
+    before = {p.relative_to(out): p.read_bytes() for p in out.rglob('*') if p.is_file() and p.name != "run-summary.json"}
+    run_tree(**args, output_dir=out, config=replace(config, resume=True))
+    assert json.loads((out / "run-summary.json").read_text())["reused_nodes"] == ["ancAB", "ancCD", "root"]
+    assert all((out / p).read_bytes() == data for p, data in before.items())
+    repeat = tmp_path / "repeat"
+    run_tree(**args, output_dir=repeat, config=config)
+    assert all((repeat / p).read_bytes() == data for p, data in before.items())
+    with monkeypatch.context() as patch:
+        patch.setattr(psl_extract, "PSL_PARSER_VERSION", "changed")
+        with pytest.raises(CheckpointError, match="stale checkpoint"):
+            run_tree(**args, output_dir=out, config=replace(config, resume=True))
+    with pytest.raises(CheckpointError, match="stale checkpoint"):
+        run_tree(**args, output_dir=out, config=replace(config, backend="hal", resume=True))
+    (root.path / "left_raw.psl").write_text("tampered\n")
+    with pytest.raises(CheckpointError, match="checksum mismatch"):
+        load_package(root.path, "root", "HAL_root")

@@ -99,7 +99,7 @@ LEAF_OCCURRENCE_FIELDS = (
     "node_end",
 )
 
-EDGE_MAPPING_FIELDS = (
+EDGE_MAPPING_CORE_FIELDS = (
     "child_node",
     "child_block_id",
     "child_occurrence_id",
@@ -116,6 +116,15 @@ EDGE_MAPPING_FIELDS = (
     "source_anchor_id",
     "tool",
     "command",
+)
+
+EDGE_MAPPING_FIELDS = EDGE_MAPPING_CORE_FIELDS + (
+    "hypothesis_id",
+    "query_strand",
+    "target_strand_explicit",
+    "raw_strand_field",
+    "psl_line_number",
+    "component_order",
 )
 
 UNMAPPED_EDGE_FIELDS = (
@@ -315,7 +324,7 @@ def read_edge_mapping_runs(path: str | Path) -> list[EdgeMappingRun]:
         reader = csv.DictReader(handle, delimiter="\t")
         if reader.fieldnames is None:
             raise ValueError("input has no header")
-        missing = sorted(set(EDGE_MAPPING_FIELDS) - set(reader.fieldnames))
+        missing = sorted(set(EDGE_MAPPING_CORE_FIELDS) - set(reader.fieldnames))
         if missing:
             raise ValueError(f"missing required columns: {', '.join(missing)}")
         for line_number, row in enumerate(reader, start=2):
@@ -338,6 +347,12 @@ def read_edge_mapping_runs(path: str | Path) -> list[EdgeMappingRun]:
                         row["source_anchor_id"],
                         row["tool"],
                         row["command"],
+                        row.get("hypothesis_id", ""),
+                        row.get("query_strand", ""),
+                        row.get("target_strand_explicit", ""),
+                        row.get("raw_strand_field", ""),
+                        int(row.get("psl_line_number") or 0),
+                        int(row.get("component_order") or 0),
                     )
                 )
             except (KeyError, ValueError) as exc:

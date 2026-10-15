@@ -2,6 +2,12 @@
 
 ## Next validation milestone - Unreleased
 
+- Add the explicit experimental `hal-psl-conservative` direct-edge backend,
+  sharing the audited DNA PSL parser. Preserve all multi-record hypotheses as
+  ambiguous spatial barriers without assigning biological copy IDs or tracks.
+- Add raw PSL/checksummed edge provenance, parser/tool resume identity,
+  checkpoint schema 0.5.0, and a bounded synthetic six-block/four-leaf HAL pilot.
+
 - Add direct `halSynteny` leaf initialization with strict PSL fragment parsing,
   deterministic local chain IDs, preserved alternatives, raw provenance, and
   constrained `halLiftover` continuation for internal nodes.

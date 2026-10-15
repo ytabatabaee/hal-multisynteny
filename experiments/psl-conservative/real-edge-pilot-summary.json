@@ -1,0 +1,28 @@
+{
+  "backend": "hal-psl-conservative",
+  "child_hal_genome": "GCF_028389875.1",
+  "component_run_counts": {
+    "ambiguous": 53,
+    "unique": 6
+  },
+  "hal_sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+  "input_blocks": 12,
+  "inputs_sha256": "3399068ba7cc5e7ba5eda842bd09ba0c75a069d2ee6c1e1e2dbbe49412694cac",
+  "mapping_status_counts": {
+    "ambiguous": 4,
+    "unaligned": 4,
+    "unique": 4
+  },
+  "parent_hal_genome": "PalaeognathaeAnc2",
+  "psl_record_hypothesis_count": 12,
+  "raw_psl_sha256": "95240b10fa597e69a2dc04f7c20f76e194d6962c022e182bc8d61a3bb3092bae",
+  "scope": "one direct edge; 12 purposively selected inputs; no clade reconstruction",
+  "status_denominator": 12,
+  "tool_versions": {
+    "halLiftover": "halLiftover v2.2: Map BED or PSL",
+    "halStats": "halStats v2.2: Retrieve basic"
+  },
+  "warnings": [
+    "Multiple PSL records are unresolved hypotheses, not biological copies; their components are ambiguity barriers and are not propagated as biological occurrences. halSynteny transitivity and general mapping-path resolution remain unestablished."
+  ]
+}

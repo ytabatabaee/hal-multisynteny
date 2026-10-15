@@ -15,6 +15,8 @@ from .audit import AuditBlock, _read_blocks, _write_tsv
 from .extract import ExtractionError, _probe_version
 from .utils import sha256_file
 
+PSL_PARSER_VERSION = "2"
+
 SUMMARY_FIELDS = [
     "block_id", "source_chrom", "source_start", "source_end", "source_length", "classification",
     "psl_record_count", "component_count", "target_chromosome_count", "observed_target_interval_count",

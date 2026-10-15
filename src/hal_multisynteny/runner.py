@@ -17,6 +17,7 @@ from .extract import (
     FakeEdgeExtractor,
     HalEdgeExtractor,
     HalSyntenyLeafInitializer,
+    is_hal_backend,
 )
 from .hal import inspect_hal
 from .io import (
@@ -55,7 +56,7 @@ class CheckpointError(RuntimeError):
     """Raised for stale, incomplete, or invalid checkpoint packages."""
 
 
-CHECKPOINT_SCHEMA_VERSION = "0.4.0"
+CHECKPOINT_SCHEMA_VERSION = "0.5.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +113,7 @@ def run_tree(
     config: RunTreeConfig,
 ) -> dict[str, object]:
     hal_info: dict[str, object] | None = None
-    if config.backend == "hal" and not config.dry_run:
+    if is_hal_backend(config.backend) and not config.dry_run:
         provisional_plan = build_traversal_plan(tree_path, node_map_path)
         required = sorted(set(provisional_plan.node_to_hal.values()))
         hal_info = inspect_hal(config.hal or "", required_genomes=required, metadata_level="basic")
@@ -121,7 +122,10 @@ def run_tree(
         plan = build_traversal_plan(tree_path, node_map_path)
     output = Path(output_dir)
     nodes_dir = output / "nodes"
+    extractor = None if config.dry_run else _build_extractor(config)
     identity = _run_identity(config, plan, leaf_blocks, hal_info)
+    if config.backend == "hal-psl-conservative" and extractor is not None:
+        identity["psl_extractor"] = extractor.identity()
     plan_payload = {
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
@@ -135,7 +139,6 @@ def run_tree(
         _write_json_atomic(output / "dry-run-plan.json", plan_payload)
         return plan_payload
 
-    extractor = _build_extractor(config)
     _init_leaf_packages_from_plan(plan, leaf_blocks, output, config.resume, identity, config)
     packages = {
         node_id: load_package(nodes_dir / node_id, node_id, plan.node_to_hal[node_id])
@@ -227,6 +230,12 @@ def run_tree(
             result,
             identity,
         )
+        manifest["warnings"] = sorted(set(manifest["warnings"]) | set(left_result.warnings) | set(right_result.warnings))
+        manifest["edge_extractions"] = {
+            side: {"backend": extraction.backend, "commands": extraction.commands,
+                   "tool_versions": extraction.tool_versions, "warnings": extraction.warnings}
+            for side, extraction in (("left", left_result), ("right", right_result))
+        }
         _update_node_statistics(result, left_package, right_package, left_result, right_result, leaf_occurrences)
         _write_internal_checkpoint(
             node_path,
@@ -240,6 +249,8 @@ def run_tree(
             right_result.unmapped,
             manifest,
             config.close_unmerged_threshold,
+            tuple((f"{side}_{name}", content) for side, extraction in (("left", left_result), ("right", right_result))
+                  for name, content in extraction.artifacts),
         )
         packages[step.node_id] = load_package(node_path, step.node_id, step.hal_genome)
         recomputed.append(step.node_id)
@@ -283,8 +294,8 @@ def _init_leaf_packages_from_plan(
     if config.leaf_init not in {"supplied", "halsynteny"}:
         raise CheckpointError("leaf_init must be supplied or halsynteny")
     if config.leaf_init == "halsynteny":
-        if config.backend != "hal" or not config.hal:
-            raise CheckpointError("--leaf-init halsynteny requires --hal and --backend hal")
+        if not is_hal_backend(config.backend) or not config.hal:
+            raise CheckpointError("--leaf-init halsynteny requires --hal and a HAL-backed backend")
         initializer = HalSyntenyLeafInitializer(config.hal, min_block_size=config.hal_synteny_min_block_size,
                                                  max_anchor_distance=config.hal_synteny_max_anchor_distance)
         _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializer, resume)
@@ -392,6 +403,9 @@ def _update_node_statistics(result, left_package, right_package, left_result, ri
         result.statistics[f"{side}_unmapped_child_block_count"] = len(unmapped_blocks)
         result.statistics[f"{side}_mapping_occurrence_count"] = len(occurrences)
         result.statistics[f"{side}_mapping_run_count"] = len(extraction.runs)
+        result.statistics[f"{side}_psl_hypothesis_count"] = len({
+            (run.child_block_id, run.hypothesis_id) for run in extraction.runs if run.hypothesis_id
+        })
         result.statistics[f"{side}_mapping_status_counts"] = {
             status: sum(value == status for value in status_by_occurrence.values())
             for status in ("unique", "duplicated", "ambiguous", "unaligned")
@@ -611,6 +625,7 @@ def _write_internal_checkpoint(
     right_unmapped: tuple[UnmappedEdgeEvidence, ...],
     manifest: dict[str, object],
     close_unmerged_threshold: int = 1000,
+    extraction_artifacts: tuple[tuple[str, str], ...] = (),
 ) -> None:
     _write_checkpoint_files(path, {
         "blocks.tsv": lambda p: write_node_blocks(p, blocks),
@@ -630,6 +645,7 @@ def _write_internal_checkpoint(
         "left_unmapped_edge_evidence.tsv": lambda p: write_unmapped_edge_evidence(p, left_unmapped),
         "right_unmapped_edge_evidence.tsv": lambda p: write_unmapped_edge_evidence(p, right_unmapped),
         "summary.json": lambda p: write_summary(p, {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occurrences), "conflicts": len(result.conflicts), "unmapped_edge_evidence": len(left_unmapped) + len(right_unmapped), "node_statistics": result.statistics or {}, "merge_rejection_counts": (result.statistics or {}).get("merge_rejection_counts", {})}),
+        **{name: (lambda p, value=content: p.write_text(value, encoding="utf-8")) for name, content in extraction_artifacts},
     }, manifest)
 
 
@@ -857,9 +873,13 @@ def _build_extractor(config: RunTreeConfig) -> EdgeExtractor:
         if not config.fake_mappings:
             raise CheckpointError("--fake-mappings is required for the fake backend")
         return FakeEdgeExtractor(config.fake_mappings)
-    if config.backend == "hal":
+    if is_hal_backend(config.backend):
         if not config.hal:
             raise CheckpointError("--hal is required for the HAL backend")
+        if config.backend == "hal-psl-conservative":
+            from .psl_extract import HalPslConservativeExtractor
+
+            return HalPslConservativeExtractor(config.hal)
         return HalEdgeExtractor(config.hal)
     raise CheckpointError(f"unknown extraction backend: {config.backend}")
 
