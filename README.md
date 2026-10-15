@@ -46,8 +46,8 @@ The experimental `--backend hal-psl-piecewise` is a fast liftover comparator.
 It partitions each input block by exact PSL component boundaries and treats
 source-disjoint records as mapping fragments. Only overlapping distinct target
 projections are ambiguous; duplicate geometry is one mapping with raw-row
-provenance. Cross-chromosome, orientation, order, target-overlap, and inherited
-barriers remain visible to reconciliation. It does not infer biological copy
+provenance. Target-overlap barriers require the same target chromosome.
+Cross-chromosome, orientation, order, and inherited barriers remain visible to reconciliation. It does not infer biological copy
 IDs, resolve multi-record path identity, or establish liftover transitivity.
 
 ```bash

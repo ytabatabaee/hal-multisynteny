@@ -257,9 +257,10 @@ No projection is unaligned evidence; one projection is unique even when it
 came from several source-disjoint records; two distinct projections over one
 source atom remain ambiguous. Exact duplicate geometry is counted once for
 classification while raw rows and line numbers remain in provenance. Source-
-disjoint components that overlap in target coordinates receive a duplication
-barrier. No record, component, or fragment identifier becomes a biological
-`copy_id`.
+disjoint components that overlap on the same target chromosome receive a
+current-edge ambiguity barrier; the provenance fields identify this as newly
+observed evidence rather than inherited state. No record, component, or
+fragment identifier becomes a biological `copy_id`.
 
 Cross-chromosome, orientation, and non-monotone-order fragments remain exact
 spatial evidence, while existing reconciliation continuity checks prevent

@@ -5,9 +5,10 @@ from dataclasses import replace
 
 from test_psl_extract import fake_extractor
 
+from hal_multisynteny.io import read_edge_mapping_runs, write_edge_mapping_runs
 from hal_multisynteny.models import NodeBlock
 from hal_multisynteny.psl_extract import HalPslPiecewiseExtractor
-from hal_multisynteny.reconcile import ReconcileConfig, _Atom, merge_decision
+from hal_multisynteny.reconcile import ReconcileConfig, _Atom, merge_decision, reconcile_node
 
 
 def _psl(block: str, q0: int, q1: int, t0: int, t1: int, strand: str = "++", target: str = "chrP") -> str:
@@ -19,6 +20,7 @@ def _psl(block: str, q0: int, q1: int, t0: int, t1: int, strand: str = "++", tar
 
 
 def _extractor(tmp_path, raw):
+    tmp_path.mkdir(parents=True, exist_ok=True)
     conservative = fake_extractor(tmp_path, raw)
     return HalPslPiecewiseExtractor(conservative.hal_path,
                                     hal_liftover=conservative.hal_liftover,
@@ -39,7 +41,9 @@ def test_source_disjoint_records_are_unique_fragments(tmp_path):
     assert result.edge_statistics["blocks"][0]["resolution_category"] == "source_disjoint_fragments"
     assert result.edge_statistics["blocks"][0]["covered_source_bases"] == 80
     assert result.edge_statistics["blocks"][0]["uncovered_source_bases"] == 20
-    assert all(not run.copy_id for run in result.runs) is False
+    assert {run.copy_id for run in result.runs} == {"1"}
+    assert len({run.child_occurrence_id for run in result.runs}) == 1
+    assert len({run.component_id for run in result.runs}) == 2
 
 
 def test_single_record_components_and_reverse_projection_are_exact(tmp_path):
@@ -69,6 +73,11 @@ def test_disjoint_different_target_chromosomes_remain_separate_fragments(tmp_pat
     assert result.block_states[0].effective_status == "unique"
     assert {run.parent_chrom for run in result.runs} == {"chrP", "chrQ"}
     assert result.edge_statistics["blocks"][0]["chromosome_boundary_count"] == 1
+    reconciled = reconcile_node([run.to_parent_mapped_run() for run in result.runs], [],
+                                parent_node="p", left_node="q", right_node="s",
+                                config=ReconcileConfig(min_block_length=1))
+    assert len(reconciled.blocks) == 2
+    assert len(reconciled.occurrences) == 2
 
 
 def test_overlapping_source_records_are_ambiguous(tmp_path):
@@ -90,6 +99,28 @@ def test_duplicate_rows_are_one_mapping_and_deterministic(tmp_path):
     assert first.runs[0].copy_id == "1"
 
 
+def test_reordered_rows_preserve_scientific_fragment_identity(tmp_path):
+    first_raw = _psl("b", 0, 40, 100, 140) + "\n" + _psl("b", 60, 100, 200, 240) + "\n"
+    second_raw = "\n".join(reversed(first_raw.splitlines())) + "\n"
+    first = _extract(_extractor(tmp_path / "first", first_raw), "b")
+    second = _extract(_extractor(tmp_path / "second", second_raw), "b")
+    normalize = lambda run: (run.child_start, run.child_end, run.parent_chrom, run.parent_start,
+                             run.parent_end, run.strand, run.copy_id, run.status,
+                             run.source_anchor_id, run.component_id)
+    assert [normalize(run) for run in first.runs] == [normalize(run) for run in second.runs]
+    assert first.block_states == second.block_states
+
+
+def test_piecewise_edge_fields_round_trip(tmp_path):
+    raw = _psl("b", 0, 40, 100, 140) + "\n" + _psl("b", 60, 100, 120, 160) + "\n"
+    result = _extract(_extractor(tmp_path, raw), "b")
+    path = tmp_path / "runs.tsv"
+    write_edge_mapping_runs(path, result.runs)
+    loaded = read_edge_mapping_runs(path)
+    assert loaded == list(result.runs)
+    assert loaded[0].current_edge_barrier_status == "ambiguous"
+
+
 def test_inherited_barriers_survive_piecewise_unique_mapping(tmp_path):
     raw = _psl("b", 0, 100, 100, 200)
     for mapping_status, classification, expected in (
@@ -108,8 +139,25 @@ def test_inherited_barriers_survive_piecewise_unique_mapping(tmp_path):
 def test_target_overlap_from_source_disjoint_pieces_is_duplication_barrier(tmp_path):
     raw = _psl("b", 0, 40, 100, 140) + "\n" + _psl("b", 60, 100, 120, 160) + "\n"
     result = _extract(_extractor(tmp_path, raw), "b")
-    assert result.block_states[0].effective_status == "duplicated"
+    assert result.block_states[0].effective_status == "ambiguous"
+    assert result.block_states[0].inherited_barrier_status == ""
+    assert result.block_states[0].current_edge_barrier_status == "ambiguous"
+    assert "current-edge" in result.block_states[0].current_edge_barrier_reason
     assert result.edge_statistics["blocks"][0]["target_overlap_conflict"] is True
+    mapped = [run.to_parent_mapped_run() for run in result.runs]
+    atom = _Atom("chrP", 100, 120, tuple(mapped), (), "left_only", True)
+    decision = merge_decision(atom, replace(atom, start=120, end=140),
+                              ReconcileConfig(max_merge_gap=1000, boundary_tolerance=1000))
+    assert not decision.can_merge
+    assert "ambiguous_evidence" in decision.rejection_reasons
+
+
+def test_piecewise_identity_has_distinct_schema_and_policy(tmp_path):
+    extractor = _extractor(tmp_path, _psl("b", 0, 100, 100, 200))
+    identity = extractor.identity()
+    assert identity["backend"] == "hal-psl-piecewise"
+    assert identity["edge_schema_version"] == "2"
+    assert identity["status_policy_version"] == "2"
 
 
 def test_piecewise_barrier_reaches_merge_decision(tmp_path):

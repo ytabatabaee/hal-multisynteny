@@ -43,7 +43,7 @@ def edge_block_state(
     inherited = ("ambiguous" if any(status == "ambiguous" for status, _ in barriers) else
                  "duplicated" if any(status == "duplicated" for status, _ in barriers) else "")
     raw = raw_outcome or ("unaligned" if record_count == 0 else "unique" if record_count == 1 else "ambiguous")
-    effective = "unaligned" if record_count == 0 else "ambiguous" if raw == "ambiguous" else inherited or "unique"
+    effective = "unaligned" if raw == "unaligned" else "ambiguous" if raw == "ambiguous" else inherited or "unique"
     return EdgeBlockState(block.block_id, raw, effective, inherited,
                           "; ".join(reason for status, reason in barriers if status),
                           block.mapping_status, block.classification)
@@ -168,8 +168,8 @@ class HalPslConservativeExtractor(HalEdgeExtractor):
 
 
 PIECEWISE_BACKEND = "hal-psl-piecewise"
-PIECEWISE_SCHEMA_VERSION = "1"
-PIECEWISE_STATUS_POLICY_VERSION = "1"
+PIECEWISE_SCHEMA_VERSION = "2"
+PIECEWISE_STATUS_POLICY_VERSION = "2"
 
 
 def _component_key(component) -> tuple[object, ...]:
@@ -252,8 +252,9 @@ class HalPslPiecewiseExtractor(HalPslConservativeExtractor):
             diagnostic = classify_source_mapping(AuditBlock(block.block_id, block.chrom, block.start, block.end), records)
             if diagnostic["classification"] == "invalid_or_ambiguous":
                 raise ExtractionError(f"invalid PSL source identity/bounds for {block.block_id}")
+            raw_components = [component for record in records for component in record.components]
             component_by_key = {}
-            for component in (component for record in records for component in record.components):
+            for component in raw_components:
                 component_by_key.setdefault(_component_key(component), component)
             components = [component_by_key[key] for key in sorted(component_by_key)]
             components = [component for component in components
@@ -283,6 +284,7 @@ class HalPslPiecewiseExtractor(HalPslConservativeExtractor):
             source_disjoint = all(not _interval_overlap((a.q_start, a.q_end), (b.q_start, b.q_end))
                                   for index, a in enumerate(components) for b in components[index + 1:])
             target_overlap_conflict = any(
+                a.t_name == b.t_name and
                 _interval_overlap((a.t_start, a.t_end), (b.t_start, b.t_end))
                 and not _interval_overlap((a.q_start, a.q_end), (b.q_start, b.q_end))
                 for index, a in enumerate(components) for b in components[index + 1:]
@@ -311,19 +313,33 @@ class HalPslPiecewiseExtractor(HalPslConservativeExtractor):
                 "single_mapping"
             )
             state = edge_block_state(block, len(records), raw_outcome=raw_outcome)
-            if target_overlap_conflict and state.effective_status == "unique":
-                state = EdgeBlockState(state.child_block_id, state.raw_mapping_outcome, "duplicated",
-                    "duplicated", "source-disjoint components overlap in target coordinates",
-                    state.inherited_mapping_status, state.inherited_classification)
+            current_reason = ""
+            if overlapping_atoms:
+                current_reason = "current-edge distinct projections overlap on source atoms"
+            if target_overlap_conflict:
+                current_reason = "current-edge source-disjoint components overlap on one target chromosome"
+            if current_reason:
+                state = EdgeBlockState(
+                    state.child_block_id, state.raw_mapping_outcome,
+                    "ambiguous" if current_reason else state.effective_status,
+                    state.inherited_barrier_status, state.inherited_barrier_reason,
+                    state.inherited_mapping_status, state.inherited_classification,
+                    "ambiguous", current_reason,
+                )
             states.append(state)
             line_numbers = sorted({record.psl_line_number for record in records})
             block_statistics.append({
                 "block_id": block.block_id, "input_block_bases": block.end - block.start,
-                "raw_psl_record_count": len(records), "normalized_distinct_mapping_count": len(components),
-                "component_count": len(components), "covered_source_bases": mapped_bases,
+                "raw_psl_record_count": len(records), "raw_component_count": len(raw_components),
+                "normalized_distinct_component_count": len(components),
+                "distinct_geometric_projection_count": len({
+                    (c.q_start, c.q_end, c.t_name, c.t_start, c.t_end, c.relative_orientation)
+                    for c in components
+                }), "component_count": len(components), "covered_source_bases": mapped_bases,
                 "uncovered_source_bases": uncovered_bases, "source_atom_count": max(0, len(boundaries) - 1),
                 "uniquely_mapped_atom_count": unique_atoms, "overlapping_alternative_atom_count": overlapping_atoms,
-                "records_source_disjoint": source_disjoint, "target_chromosome_count": len({c.t_name for c in components}),
+                "records_source_disjoint": source_disjoint if len(records) > 1 else False,
+                "target_chromosome_count": len({c.t_name for c in components}),
                 "relative_orientation_count": len({c.relative_orientation for c in components}),
                 "target_overlap_conflict": target_overlap_conflict,
                 "chromosome_boundary_count": chromosome_boundary_count,
@@ -332,6 +348,8 @@ class HalPslPiecewiseExtractor(HalPslConservativeExtractor):
                 "raw_mapping_outcome": state.raw_mapping_outcome, "effective_status": state.effective_status,
                 "inherited_barrier_status": state.inherited_barrier_status,
                 "inherited_barrier_reason": state.inherited_barrier_reason,
+                "current_edge_barrier_status": state.current_edge_barrier_status,
+                "current_edge_barrier_reason": state.current_edge_barrier_reason,
                 "resolution_category": "inherited_barrier" if state.inherited_barrier_status else resolution,
                 "psl_line_numbers": line_numbers,
             })
@@ -356,7 +374,8 @@ class HalPslPiecewiseExtractor(HalPslConservativeExtractor):
                     source_anchor, "halLiftover", json.dumps(command), hypothesis, component.query_strand,
                     component.target_strand_explicit or "", component.raw_strand_field, component.psl_line_number,
                     component.component_order, state.raw_mapping_outcome, state.inherited_barrier_status,
-                    state.inherited_barrier_reason, "", f"piece_{digest}_{component_index:06d}"))
+                    state.inherited_barrier_reason, "", f"piece_{digest}_{component_index:06d}",
+                    state.current_edge_barrier_status, state.current_edge_barrier_reason))
         raw_counts = {status: sum(state.raw_mapping_outcome == status for state in states)
                       for status in ("unique", "ambiguous", "unaligned")}
         effective_counts = {status: sum(state.effective_status == status for state in states)
@@ -369,8 +388,10 @@ class HalPslPiecewiseExtractor(HalPslConservativeExtractor):
             "denominator_definition": "one row per input NodeBlock; source bases are interval-union totals",
             "input_block_count": len(blocks), "raw_mapping_outcome_counts": raw_counts,
             "effective_status_counts": effective_counts, "blocks": block_statistics,
+            "raw_component_count": sum(int(row["raw_component_count"]) for row in block_statistics),
+            "normalized_distinct_component_count": sum(int(row["normalized_distinct_component_count"]) for row in block_statistics),
+            "distinct_geometric_projection_count": sum(int(row["distinct_geometric_projection_count"]) for row in block_statistics),
             "component_count": sum(int(row["component_count"]) for row in block_statistics),
-            "normalized_distinct_mapping_count": sum(int(row["normalized_distinct_mapping_count"]) for row in block_statistics),
             "covered_source_bases": sum(int(row["covered_source_bases"]) for row in block_statistics),
             "uncovered_source_bases": sum(int(row["uncovered_source_bases"]) for row in block_statistics),
             "blocks_with_no_chain_overlap": sum(row["raw_mapping_outcome"] == "unaligned" for row in block_statistics),

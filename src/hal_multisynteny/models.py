@@ -93,6 +93,8 @@ class ParentMappedRun:
     inherited_barrier_reason: str = ""
     synteny_chain_id: str = ""
     component_id: str = ""
+    current_edge_barrier_status: str = ""
+    current_edge_barrier_reason: str = ""
 
     def __post_init__(self) -> None:
         if self.synteny_chain_id and self.copy_id:
@@ -110,7 +112,10 @@ class ParentMappedRun:
         empty = sorted(name for name, value in required.items() if not value.strip())
         unknown_psl_copy = (
             (self.status == "ambiguous" and bool(self.hypothesis_id)) or
-            (self.status == "duplicated" and self.inherited_barrier_status == "duplicated")
+            (self.status == "duplicated" and (
+                self.inherited_barrier_status == "duplicated" or
+                self.current_edge_barrier_status == "duplicated"
+            ))
         )
         if not self.copy_id.strip() and not (unknown_psl_copy or self.synteny_chain_id):
             empty.append("copy_id")
@@ -249,6 +254,8 @@ class EdgeMappingRun:
     inherited_barrier_reason: str = ""
     synteny_chain_id: str = ""
     component_id: str = ""
+    current_edge_barrier_status: str = ""
+    current_edge_barrier_reason: str = ""
 
     def __post_init__(self) -> None:
         if self.synteny_chain_id and self.copy_id:
@@ -291,6 +298,8 @@ class EdgeMappingRun:
             inherited_barrier_reason=self.inherited_barrier_reason,
             synteny_chain_id=self.synteny_chain_id,
             component_id=self.component_id,
+            current_edge_barrier_status=self.current_edge_barrier_status,
+            current_edge_barrier_reason=self.current_edge_barrier_reason,
         )
 
 
@@ -333,3 +342,5 @@ class EdgeBlockState:
     inherited_barrier_reason: str
     inherited_mapping_status: str
     inherited_classification: str
+    current_edge_barrier_status: str = ""
+    current_edge_barrier_reason: str = ""
