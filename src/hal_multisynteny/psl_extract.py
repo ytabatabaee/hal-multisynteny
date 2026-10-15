@@ -7,21 +7,43 @@ import subprocess
 import tempfile
 from collections import Counter
 from collections.abc import Iterable
+from dataclasses import asdict
 from pathlib import Path
 
 from .audit import AuditBlock
 from .extract import EdgeExtractionResult, ExtractionError, HalEdgeExtractor
-from .models import EdgeMappingRun, NodeBlock, UnmappedEdgeEvidence
+from .models import EdgeBlockState, EdgeMappingRun, NodeBlock, UnmappedEdgeEvidence
 from .source_diagnostic import PSL_PARSER_VERSION, classify_source_mapping, read_source_psl
 from .utils import sha256_file
 
 BACKEND = "hal-psl-conservative"
-PSL_EDGE_SCHEMA_VERSION = "1"
+PSL_EDGE_SCHEMA_VERSION = "2"
+STATUS_POLICY_VERSION = "1"
 WARNING = (
     "Multiple PSL records are unresolved hypotheses, not biological copies; "
     "their components are ambiguity barriers and are not propagated as biological occurrences. "
     "halSynteny transitivity and general mapping-path resolution remain unestablished."
 )
+
+# Orientation/order conflicts alone are not inherited barriers. A compound
+# conflict is already classified as complex and conservatively remains ambiguous.
+CLASSIFICATION_BARRIERS = {"ambiguous": "ambiguous", "complex": "ambiguous",
+                           "duplication_conflict": "duplicated"}
+MAPPING_STATUS_BARRIERS = {"ambiguous": "ambiguous", "duplicated": "duplicated"}
+
+
+def edge_block_state(block: NodeBlock, record_count: int) -> EdgeBlockState:
+    barriers = [
+        (MAPPING_STATUS_BARRIERS.get(block.mapping_status), f"inherited mapping_status={block.mapping_status}"),
+        (CLASSIFICATION_BARRIERS.get(block.classification), f"inherited classification={block.classification}"),
+    ]
+    inherited = ("ambiguous" if any(status == "ambiguous" for status, _ in barriers) else
+                 "duplicated" if any(status == "duplicated" for status, _ in barriers) else "")
+    raw = "unaligned" if record_count == 0 else "unique" if record_count == 1 else "ambiguous"
+    effective = "unaligned" if record_count == 0 else "ambiguous" if raw == "ambiguous" else inherited or "unique"
+    return EdgeBlockState(block.block_id, raw, effective, inherited,
+                          "; ".join(reason for status, reason in barriers if status),
+                          block.mapping_status, block.classification)
 
 
 class HalPslConservativeExtractor(HalEdgeExtractor):
@@ -58,6 +80,7 @@ class HalPslConservativeExtractor(HalEdgeExtractor):
     def identity(self) -> dict[str, object]:
         return {"backend": BACKEND, "parser_version": PSL_PARSER_VERSION,
                 "edge_schema_version": PSL_EDGE_SCHEMA_VERSION, "hal_sha256": self.hal_checksum,
+                "status_policy_version": STATUS_POLICY_VERSION,
                 "parent_map": self.parent_map, "tools": self._tools}
 
     def tool_versions(self) -> dict[str, str]:
@@ -70,6 +93,8 @@ class HalPslConservativeExtractor(HalEdgeExtractor):
         blocks = tuple(sorted(child_blocks, key=lambda b: (b.chrom, b.start, b.end, b.block_id)))
         if len({b.block_id for b in blocks}) != len(blocks) or any(b.node != child_node_id for b in blocks):
             raise ExtractionError("duplicate block IDs or blocks from a different child node")
+        if not blocks:
+            return self._result((), (), (), "", "", "", ())
         command = (self.hal_liftover, "--outPSLWithName", str(self.hal_path), child_hal_genome,
                    "child.bed", parent_hal_genome, "parent.psl")
         # Relative file names and an isolated cwd preserve the exact invoked
@@ -88,21 +113,23 @@ class HalPslConservativeExtractor(HalEdgeExtractor):
             grouped = read_source_psl(path)
         if set(grouped) - {b.block_id for b in blocks}:
             raise ExtractionError("halLiftover PSL returned unknown block IDs")
-        runs, unmapped = [], []
+        runs, unmapped, states = [], [], []
         for block in blocks:
             records = grouped.get(block.block_id, [])
             diagnostic = classify_source_mapping(AuditBlock(block.block_id, block.chrom, block.start, block.end), records)
             if diagnostic["classification"] == "invalid_or_ambiguous":
                 raise ExtractionError(f"invalid PSL source identity/bounds for {block.block_id}")
+            state = edge_block_state(block, len(records))
+            states.append(state)
             if not records:
                 unmapped.append(UnmappedEdgeEvidence(child_node_id, parent_node_id, block.block_id,
                     block.chrom, block.start, block.end, "unaligned", "halLiftover PSL returned zero records",
-                    f"{child_node_id}:{block.block_id}:psl:unaligned", "halLiftover", json.dumps(command)))
+                    f"{child_node_id}:{block.block_id}:psl:unaligned", "halLiftover", json.dumps(command),
+                    state.raw_mapping_outcome, state.inherited_barrier_status, state.inherited_barrier_reason))
                 continue
             # Prior unresolved evidence must remain a barrier even when this edge
             # has a single alignment record. It cannot be rehabilitated by liftover.
-            ambiguous = len(records) > 1 or block.mapping_status == "ambiguous" or block.classification in {"ambiguous", "complex"}
-            status = "ambiguous" if ambiguous else "unique"
+            status = state.effective_status
             occurrence_id = f"{child_node_id}:{block.block_id}:psl-input"
             keyed = []
             for record in records:
@@ -118,16 +145,20 @@ class HalPslConservativeExtractor(HalEdgeExtractor):
                 for c in record.components:
                     runs.append(EdgeMappingRun(child_node_id, block.block_id, occurrence_id, c.q_name, c.q_start, c.q_end,
                         parent_node_id, c.t_name, c.t_start, c.t_end, c.relative_orientation,
-                        "" if ambiguous else "1", status,
+                        "1" if status == "unique" else "", status,
                         f"{occurrence_id}:{hypothesis}:component{c.component_order:06d}", "halLiftover", json.dumps(command),
                         hypothesis, c.query_strand, c.target_strand_explicit or "", c.raw_strand_field,
-                        c.psl_line_number, c.component_order))
+                        c.psl_line_number, c.component_order, state.raw_mapping_outcome,
+                        state.inherited_barrier_status, state.inherited_barrier_reason))
         runs.sort(key=lambda r: (r.parent_chrom, r.parent_start, r.parent_end, r.child_block_id,
                                  r.hypothesis_id, r.component_order))
-        provenance = {**self.identity(), "commands": [command], "warnings": [WARNING],
+        return self._result(tuple(runs), tuple(unmapped), (command,), raw, completed.stdout, completed.stderr, tuple(states))
+
+    def _result(self, runs, unmapped, commands, raw, stdout, stderr, states):
+        provenance = {**self.identity(), "commands": commands, "warnings": [WARNING],
                       "raw_psl_sha256": hashlib.sha256(raw.encode()).hexdigest(),
-                      "outcomes": {b.block_id: ("unaligned" if not grouped.get(b.block_id) else
-                                   "unique" if len(grouped[b.block_id]) == 1 else "ambiguous") for b in blocks}}
-        return EdgeExtractionResult(tuple(runs), tuple(unmapped), BACKEND, self.tool_versions(), (command,), (WARNING,),
-            (("raw.psl", raw), ("stdout.txt", completed.stdout), ("stderr.txt", completed.stderr),
-             ("psl_provenance.json", json.dumps(provenance, sort_keys=True, indent=2) + "\n")))
+                      "outcomes": {state.child_block_id: state.raw_mapping_outcome for state in states},
+                      "block_states": [asdict(state) for state in states]}
+        return EdgeExtractionResult(runs, unmapped, BACKEND, self.tool_versions(), commands, (WARNING,),
+            (("raw.psl", raw), ("stdout.txt", stdout), ("stderr.txt", stderr),
+             ("psl_provenance.json", json.dumps(provenance, sort_keys=True, indent=2) + "\n")), states)

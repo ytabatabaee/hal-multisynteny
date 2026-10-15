@@ -28,7 +28,13 @@ hal-multisynteny run-tree --backend hal-psl-conservative \
   --min-block-length 1 --hal-synteny-min-block-size 1
 ```
 
-Checkpoint schema `0.5.0` rejects older checkpoints; use a fresh output directory.
+One current-edge PSL record cannot resolve inherited duplication or ambiguity.
+Raw edge outcomes and effective reconciliation states are recorded separately;
+inherited duplication remains a no-merge barrier, including when filtered for
+length. Known descendant copy IDs survive without assigning copies to PSL records.
+See the [inheritance validation report](experiments/psl-conservative/INHERITED_DUPLICATION.md).
+
+Checkpoint schema `0.6.0` rejects older checkpoints; use a fresh output directory.
 
 The input is a run-length table mapping collinear intervals in descendant
 genomes to one chosen ancestral genome in HAL. The builder:

@@ -355,3 +355,20 @@ def test_tiny_hal_halsynteny_and_conservative_internal_edges(tiny_hal_manifest, 
     (root.path / "left_raw.psl").write_text("tampered\n")
     with pytest.raises(CheckpointError, match="checksum mismatch"):
         load_package(root.path, "root", "HAL_root")
+
+
+def test_real_hal_single_record_preserves_inherited_duplication(tiny_hal_manifest):
+    from hal_multisynteny.psl_extract import HalPslConservativeExtractor
+    from hal_multisynteny.reconcile import ReconcileConfig, reconcile_node
+
+    extractor = HalPslConservativeExtractor(tiny_hal_manifest["_hal_path"])
+    block = NodeBlock("known-descendant-duplication", "A", "chrA", 0, 10, "duplication_conflict", "duplicated")
+    result = extractor.extract("A", "ancAB", "HAL_A", "HAL_ancAB", [block])
+    assert len(result.runs) == 1
+    run, = result.runs
+    assert run.raw_mapping_outcome == "unique" and run.status == "duplicated"
+    assert run.copy_id == "" and run.inherited_barrier_status == "duplicated"
+    reconciled = reconcile_node([run.to_parent_mapped_run()], [], parent_node="ancAB", left_node="A", right_node="B",
+                                config=ReconcileConfig(min_block_length=1, boundary_tolerance=100, max_merge_gap=100))
+    assert reconciled.blocks[0].classification == "duplication_conflict"
+    assert reconciled.blocks[0].mapping_quality == "duplicated"

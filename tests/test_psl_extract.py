@@ -157,7 +157,7 @@ def test_ambiguous_status_accounting_is_per_input_not_record_or_component(tmp_pa
     assert json.loads(dict(extraction.artifacts)["psl_provenance.json"])["outcomes"]["orientation_change"] == "ambiguous"
 
 
-@pytest.mark.parametrize("change", ["parser", "schema", "tool", "hal"])
+@pytest.mark.parametrize("change", ["parser", "schema", "policy", "tool", "hal"])
 def test_extractor_resume_identity_changes(tmp_path, monkeypatch, change):
     from hal_multisynteny import psl_extract
 
@@ -167,6 +167,8 @@ def test_extractor_resume_identity_changes(tmp_path, monkeypatch, change):
         monkeypatch.setattr(psl_extract, "PSL_PARSER_VERSION", "changed")
     elif change == "schema":
         monkeypatch.setattr(psl_extract, "PSL_EDGE_SCHEMA_VERSION", "changed")
+    elif change == "policy":
+        monkeypatch.setattr(psl_extract, "STATUS_POLICY_VERSION", "changed")
     elif change == "tool":
         path = Path(ex.hal_liftover)
         path.write_text(path.read_text() + "\n# executable changed\n")

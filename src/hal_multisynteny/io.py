@@ -42,7 +42,7 @@ RUN_FIELDS = (
     "strand",
 )
 
-PARENT_RUN_FIELDS = (
+PARENT_RUN_CORE_FIELDS = (
     "child_node",
     "child_block_id",
     "child_occurrence_id",
@@ -58,6 +58,13 @@ PARENT_RUN_FIELDS = (
     "copy_id",
     "status",
     "source_anchor_id",
+)
+
+PARENT_RUN_FIELDS = PARENT_RUN_CORE_FIELDS + (
+    "hypothesis_id",
+    "raw_mapping_outcome",
+    "inherited_barrier_status",
+    "inherited_barrier_reason",
 )
 
 NODE_BLOCK_FIELDS = (
@@ -125,6 +132,9 @@ EDGE_MAPPING_FIELDS = EDGE_MAPPING_CORE_FIELDS + (
     "raw_strand_field",
     "psl_line_number",
     "component_order",
+    "raw_mapping_outcome",
+    "inherited_barrier_status",
+    "inherited_barrier_reason",
 )
 
 UNMAPPED_EDGE_FIELDS = (
@@ -139,6 +149,9 @@ UNMAPPED_EDGE_FIELDS = (
     "source_anchor_id",
     "tool",
     "command",
+    "raw_mapping_outcome",
+    "inherited_barrier_status",
+    "inherited_barrier_reason",
 )
 
 LEAF_SEED_FIELDS = (
@@ -196,7 +209,7 @@ def read_parent_runs(path: str | Path) -> list[ParentMappedRun]:
         reader = csv.DictReader(handle, delimiter="\t")
         if reader.fieldnames is None:
             raise ValueError("input has no header")
-        missing = sorted(set(PARENT_RUN_FIELDS) - set(reader.fieldnames))
+        missing = sorted(set(PARENT_RUN_CORE_FIELDS) - set(reader.fieldnames))
         if missing:
             raise ValueError(f"missing required columns: {', '.join(missing)}")
         for line_number, row in enumerate(reader, start=2):
@@ -221,6 +234,10 @@ def read_parent_runs(path: str | Path) -> list[ParentMappedRun]:
                         copy_id=row["copy_id"],
                         status=status,
                         source_anchor_id=row["source_anchor_id"],
+                        hypothesis_id=row.get("hypothesis_id", ""),
+                        raw_mapping_outcome=row.get("raw_mapping_outcome", ""),
+                        inherited_barrier_status=row.get("inherited_barrier_status", ""),
+                        inherited_barrier_reason=row.get("inherited_barrier_reason", ""),
                     )
                 )
             except (KeyError, ValueError) as exc:
@@ -353,6 +370,9 @@ def read_edge_mapping_runs(path: str | Path) -> list[EdgeMappingRun]:
                         row.get("raw_strand_field", ""),
                         int(row.get("psl_line_number") or 0),
                         int(row.get("component_order") or 0),
+                        row.get("raw_mapping_outcome", ""),
+                        row.get("inherited_barrier_status", ""),
+                        row.get("inherited_barrier_reason", ""),
                     )
                 )
             except (KeyError, ValueError) as exc:
@@ -521,6 +541,10 @@ def write_leaf_occurrences(path: str | Path, records: Iterable[LeafOccurrence]) 
 
 def write_edge_mapping_runs(path: str | Path, records: Iterable[EdgeMappingRun]) -> None:
     _write_dataclasses(path, records, list(EDGE_MAPPING_FIELDS))
+
+
+def write_parent_runs(path: str | Path, records: Iterable[ParentMappedRun]) -> None:
+    _write_dataclasses(path, records, list(PARENT_RUN_FIELDS))
 
 
 def write_unmapped_edge_evidence(

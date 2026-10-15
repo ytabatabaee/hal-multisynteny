@@ -1,5 +1,9 @@
 # Conservative PSL backend: controlled pilot
 
+This report describes the original backend milestone. The subsequent
+[inherited duplication correction](INHERITED_DUPLICATION.md) documents current
+status precedence, checkpoint schema 0.6.0, and the additional controlled pilot.
+
 Baseline: main `1d9b8aa7393d9a5a42ed8b5b5d7c7a1a953fdf56`, pulled with
 `git pull --ff-only origin main` (already up to date). This milestone uses
 checked-in synthetic MAF/HAL fixtures and a bounded 12-interval extraction on

@@ -102,7 +102,8 @@ they never become false unaligned outcomes.
 
 Zero records produce nonspatial `UnmappedEdgeEvidence(status=unaligned)`. One
 record produces exact component `EdgeMappingRun`s with one stable logical input
-occurrence, status unique, and relative orientation in `strand`. Query sign,
+occurrence, raw outcome unique, and relative orientation in `strand`. The
+effective status also incorporates unresolved inherited evidence below. Query sign,
 nullable explicit target sign (empty TSV field when absent), raw strand field,
 PSL line number, and component order remain separate provenance fields. No
 component spans a source or target gap. Many components do not imply copies.
@@ -120,7 +121,7 @@ Ambiguous PSL runs enter the sweep as spatial barriers. Existing classification
 rules produce ambiguous or complex atoms and existing filtered-atom barriers
 prevent bridging even if the ambiguous atom is shorter than the minimum. An
 explicit merge-decision guard rejects ambiguous PSL support independently of the
-atom label, and a reconciliation assertion requires each such retained group to
+atom label, and an explicit runtime check requires each such retained group to
 be a single conflict atom. Hypotheses are excluded from biological occurrence
 projection: they cannot become pseudo-adjacent child/leaf tracks or biological
 copy counts. Compatible sibling evidence can still be represented in a conflict
@@ -134,15 +135,65 @@ than selecting an alternative. Conflict blocks remain diagnostics, never normal
 resolved blocks. Merge thresholds and the greedy baseline are unchanged. Legacy
 non-PSL ambiguous evidence retains its existing behavior.
 
-Per-side status accounting uses distinct logical input occurrences plus one
-unaligned outcome per zero-record input block. Hypotheses and fragments have
-separate counts; ambiguous hypotheses do not inflate either unique or unaligned
-counts. Inherited ambiguity is counted as ambiguous effective evidence even when
-the raw next-edge record-count outcome is unique.
+### Raw outcomes and inherited barriers
 
-The checkpoint schema is now `0.5.0` (independently of package release version).
+`EdgeBlockState` records one outcome per input child block. `raw_mapping_outcome`
+describes only the current edge's valid record count. Run `status` is the effective
+reconciliation state. `inherited_barrier_status` and `inherited_barrier_reason`
+preserve the prior state and its causes; provenance also retains the original
+child classification and mapping status. These fields do not resolve copies.
+
+| Current records | Inherited evidence | Raw outcome | Effective status |
+| --- | --- | --- | --- |
+| 0 | Any | unaligned | unaligned; no spatial run, inherited state retained |
+| >1 | Any | ambiguous | ambiguous |
+| 1 | ambiguous mapping status, or ambiguous/complex classification | unique | ambiguous |
+| 1 | duplicated mapping status, or duplication_conflict classification, without ambiguity | unique | duplicated |
+| 1 | None of the above | unique | unique |
+
+Inherited ambiguity takes precedence over duplication. Standalone orientation
+and order conflicts do not become inherited duplication/ambiguity barriers;
+they retain the existing current-node no-merge behavior. A compound conflict
+classified as complex propagates as ambiguous. No historical conflict is
+automatically interpreted as duplication.
+
+A single record on an inherited duplicated block maps the current node interval;
+it cannot establish which descendant copies are resolved. Its runs have empty
+`copy_id` and retain a mapping `hypothesis_id`, effective duplicated status, and
+the inherited marker. They contribute one interval path, not a newly inferred
+biological copy. Projection through this path retains the descendant/leaf copy
+IDs already present in the child checkpoint. Unknown current-node copy IDs are
+excluded from biological track counts. Multi-record hypotheses remain excluded
+from biological occurrence projection entirely.
+
+Inherited duplicated runs force duplication_conflict (or complex when ambiguity
+also exists). `merge_decision` rejects them with `inherited_duplication`, even
+with otherwise compatible coordinates or permissive boundary tolerance. The
+existing filtered evidence barrier also prevents bridging a short duplicated
+atom. `BarrierInvariantError` rejects a retained group containing either unresolved
+PSL ambiguity or inherited duplication unless it is a single appropriately
+classified conflict atom. This runtime check remains active under `python -O`.
+The greedy scan and thresholds are unchanged.
+
+For PSL extraction, each side's `raw_mapping_outcome_counts` (unique, ambiguous,
+unaligned) and `effective_status_counts` (unique, duplicated, ambiguous, unaligned)
+both use the number of input child blocks as denominator. Counts sum exactly to
+their denominators; aggregate node counts sum the two sides. Effective counts are
+also exposed through the existing `mapping_status_counts` names. A zero-record
+block contributes one unaligned outcome and retains inherited state in provenance.
+PSL components, records/hypotheses, and inherited leaf copies do not inflate these
+denominators; component-run and hypothesis counts remain separate. New raw counts
+are emitted only when the extraction supplies explicit block states; they are not
+invented for legacy BED6 or stored halSynteny runs. Other backends retain their
+existing logical-occurrence accounting.
+
+The checkpoint schema is now `0.6.0` (independently of package release version).
 Resume identity contains backend, parser and edge-schema versions, HAL checksum,
-direct parent map, tool paths, executable checksums and help-derived versions.
+direct parent map, tool paths, executable checksums and help-derived versions,
+plus status-policy version 1. The audited parser remains version 2; the PSL edge
+schema is version 2. Edge and parent-run TSVs add optional raw outcome and inherited
+barrier fields; unmapped TSVs retain the same inherited provenance. NodeBlock's
+existing effective mapping status and classification are unchanged.
 Old checkpoints are rejected as stale; use a fresh output directory. Legacy
 16-column edge TSV inputs still load; new writes include optional PSL fields.
 Internal checkpoints add `left_raw.psl` / `right_raw.psl`, per-side stdout/stderr,
@@ -151,6 +202,8 @@ the manifest along with the existing exact edge-run tables. Commands use an
 isolated cwd and stable relative BED/PSL filenames. Leaf checkpoints retain their
 existing raw halSynteny provenance. Extraction warnings and commands are also
 included in internal manifests.
+An empty extraction returns deterministic empty raw/stdout/stderr artifacts and
+an empty block-state list, with backend/tool identity and no HAL invocation.
 
 The bounded pilot can be reproduced with:
 
@@ -159,7 +212,8 @@ python -m scripts.run_conservative_psl_pilot --output-dir hal-ci-output/psl-pilo
 ```
 
 It accepts only checked-in synthetic fixtures, extracts six controlled blocks,
-and runs the tiny four-leaf tree with halSynteny initialization. Raw outputs and
+probes single-record inherited duplication/ambiguity, and runs the tiny four-leaf
+tree with halSynteny initialization. Raw outputs and
 the generated HAL remain ignored. This validates pipeline mechanics, not full
 clade readiness; multi-record mapping-path identity remains unresolved and
 halSynteny transitivity remains unproven.

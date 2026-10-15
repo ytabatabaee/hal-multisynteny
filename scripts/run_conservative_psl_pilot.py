@@ -38,6 +38,19 @@ def pilot(output: Path) -> dict[str, object]:
     counts = dict(sorted(Counter(outcomes.values()).items()))
     assert counts == {"ambiguous": 2, "unaligned": 1, "unique": 3}
     assert all(not r.copy_id for r in result.runs if r.status == "ambiguous")
+    inherited = extractor.extract("child", "parent", "PSL_child", "PSL_parent", (
+        NodeBlock("inherited_duplication", "child", "chrQ", 0, 10, "duplication_conflict", "duplicated"),
+        NodeBlock("inherited_ambiguity", "child", "chrQ", 0, 10, "complex", "ambiguous"),
+    ))
+    for name, content in inherited.artifacts:
+        (output / f"inherited_{name}").write_text(content)
+    write_edge_mapping_runs(output / "inherited_edge_runs.tsv", inherited.runs)
+    inherited_raw = dict(Counter(state.raw_mapping_outcome for state in inherited.block_states))
+    inherited_effective = dict(Counter(state.effective_status for state in inherited.block_states))
+    if inherited_raw != {"unique": 2} or inherited_effective != {"duplicated": 1, "ambiguous": 1}:
+        raise RuntimeError("single-record HAL paths lost their inherited barriers")
+    if any(run.copy_id for run in inherited.runs):
+        raise RuntimeError("inherited barrier paths invented biological copy IDs")
     if not (fixture / "build/tiny.hal").exists():
         subprocess.run(["scripts/build_tiny_hal_fixture.sh"], check=True)
     tree_out = output / "four-leaf-tree"
@@ -55,6 +68,10 @@ def pilot(output: Path) -> dict[str, object]:
         "run_status_counts": dict(sorted(Counter(r.status for r in result.runs).items())),
         "root_blocks": len(root.blocks), "root_leaf_occurrences": len(root.leaf_occurrences),
         "root_leaves": leaves, "warnings": result.warnings,
+        "raw_mapping_outcome_counts": dict(Counter(state.raw_mapping_outcome for state in result.block_states)),
+        "effective_status_counts": dict(Counter(state.effective_status for state in result.block_states)),
+        "inheritance_probe": {"input_blocks": 2, "raw_mapping_outcome_counts": inherited_raw,
+                              "effective_status_counts": inherited_effective},
         "readiness": "controlled testing only; multi-record resolution remains unresolved"}
     (output / "pilot-summary.json").write_text(json.dumps(summary, sort_keys=True, indent=2) + "\n")
     print(json.dumps(summary, sort_keys=True, indent=2))

@@ -56,7 +56,7 @@ class CheckpointError(RuntimeError):
     """Raised for stale, incomplete, or invalid checkpoint packages."""
 
 
-CHECKPOINT_SCHEMA_VERSION = "0.5.0"
+CHECKPOINT_SCHEMA_VERSION = "0.6.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -416,6 +416,35 @@ def _update_node_statistics(result, left_package, right_package, left_result, ri
         result.statistics[f"{side}_mapping_status_denominator"] = side_denominator
         if sum(result.statistics[f"{side}_mapping_status_counts"].values()) != side_denominator:
             raise CheckpointError(f"{side} mapping status counts do not reconcile with their denominator")
+        result.statistics[f"{side}_effective_status_counts"] = dict(result.statistics[f"{side}_mapping_status_counts"])
+        result.statistics[f"{side}_effective_status_denominator"] = side_denominator
+        if extraction.block_states is not None:
+            states = {state.child_block_id: state for state in extraction.block_states}
+            if len(states) != len(extraction.block_states) or set(states) != input_blocks:
+                raise CheckpointError(f"{side} PSL block states do not cover input blocks exactly")
+            raw_counts = {status: sum(state.raw_mapping_outcome == status for state in states.values())
+                          for status in ("unique", "ambiguous", "unaligned")}
+            effective_counts = {status: sum(state.effective_status == status for state in states.values())
+                                for status in ("unique", "duplicated", "ambiguous", "unaligned")}
+            if (sum(raw_counts.values()) != len(input_blocks) or
+                sum(effective_counts.values()) != len(input_blocks) or
+                effective_counts != result.statistics[f"{side}_effective_status_counts"] or
+                side_denominator != len(input_blocks)):
+                raise CheckpointError(f"{side} raw/effective PSL status counts do not reconcile")
+            for run in extraction.runs:
+                state = states[run.child_block_id]
+                if run.status != state.effective_status or run.raw_mapping_outcome != state.raw_mapping_outcome:
+                    raise CheckpointError(f"{side} PSL run status disagrees with block state")
+            for evidence in extraction.unmapped:
+                state = states[evidence.child_block_id]
+                if state.raw_mapping_outcome != "unaligned" or state.effective_status != "unaligned":
+                    raise CheckpointError(f"{side} unmapped PSL outcome disagrees with block state")
+                if (evidence.raw_mapping_outcome != state.raw_mapping_outcome or
+                    evidence.inherited_barrier_status != state.inherited_barrier_status or
+                    evidence.inherited_barrier_reason != state.inherited_barrier_reason):
+                    raise CheckpointError(f"{side} unmapped PSL provenance disagrees with block state")
+            result.statistics[f"{side}_raw_mapping_outcome_counts"] = raw_counts
+            result.statistics[f"{side}_raw_mapping_outcome_denominator"] = len(input_blocks)
     result.statistics["leaf_occurrences_represented"] = len(leaf_occurrences)
     result.statistics["mapping_status_denominator"] = (
         result.statistics["left_mapping_status_denominator"] + result.statistics["right_mapping_status_denominator"]
@@ -426,6 +455,15 @@ def _update_node_statistics(result, left_package, right_package, left_result, ri
     }
     if sum(result.statistics["mapping_status_counts"].values()) != result.statistics["mapping_status_denominator"]:
         raise CheckpointError("mapping status counts do not reconcile with their denominator")
+    result.statistics["effective_status_counts"] = dict(result.statistics["mapping_status_counts"])
+    result.statistics["effective_status_denominator"] = result.statistics["mapping_status_denominator"]
+    if left_result.block_states is not None and right_result.block_states is not None:
+        result.statistics["raw_mapping_outcome_counts"] = {
+            status: sum(result.statistics[f"{side}_raw_mapping_outcome_counts"][status] for side in ("left", "right"))
+            for status in ("unique", "ambiguous", "unaligned")
+        }
+        result.statistics["raw_mapping_outcome_denominator"] = sum(
+            result.statistics[f"{side}_raw_mapping_outcome_denominator"] for side in ("left", "right"))
     # Keep the historical top-level names, but make them obey the same
     # logical-occurrence denominator as the side-specific diagnostics.
     for status in ("unique", "duplicated", "ambiguous", "unaligned"):

@@ -25,6 +25,10 @@ CLASSIFICATIONS = (
 COPY_ID_SCOPES = ("local", "global")
 
 
+class BarrierInvariantError(ValueError):
+    """Unresolved evidence escaped its conflict-atom barrier."""
+
+
 def _ids(records: Iterable[ParentMappedRun], attribute: str) -> str:
     return ",".join(sorted({getattr(record, attribute) for record in records}))
 
@@ -347,6 +351,7 @@ def _biological_track_count(occurrences: Iterable[ReconciledOccurrence]) -> int:
                 occurrence.copy_id,
             )
             for occurrence in occurrences
+            if not (occurrence.status == "duplicated" and not occurrence.copy_id)
         }
     )
 
@@ -372,6 +377,9 @@ def _classify(
         return "unaligned"
     if has_usable and (ambiguous or unaligned):
         return "complex"
+    if any(record.status == "duplicated" and record.inherited_barrier_status == "duplicated"
+           for record in all_records):
+        return "duplication_conflict"
     if usable_left and not usable_right:
         return "left_only"
     if usable_right and not usable_left:
@@ -495,6 +503,9 @@ def merge_decision(
         any(record.hypothesis_id and record.status == "ambiguous"
             for record in previous.left + previous.right + current.left + current.right)):
         reasons.append("ambiguous_evidence")
+    if any(record.status == "duplicated" and record.inherited_barrier_status == "duplicated"
+           for record in previous.left + previous.right + current.left + current.right):
+        reasons.append("inherited_duplication")
     if reasons:
         return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
                              False, "", tuple(reasons), gap, _child_gap_text(previous, current, "left"),
@@ -738,6 +749,16 @@ def _project_occurrences(
     return occurrences
 
 
+def _validate_barrier_group(group: list[_Atom], records: tuple[ParentMappedRun, ...]) -> None:
+    if (any(record.hypothesis_id and record.status == "ambiguous" for record in records)
+            and (len(group) != 1 or group[0].classification not in {"ambiguous", "complex"})):
+        raise BarrierInvariantError("unresolved PSL ambiguity must remain a single conflict atom")
+    if (any(record.status == "duplicated" and record.inherited_barrier_status == "duplicated"
+            for record in records)
+            and (len(group) != 1 or group[0].classification not in {"duplication_conflict", "complex"})):
+        raise BarrierInvariantError("inherited_duplication must remain a single conflict atom")
+
+
 def reconcile_node(
     left_runs: list[ParentMappedRun],
     right_runs: list[ParentMappedRun],
@@ -814,10 +835,7 @@ def reconcile_node(
         records = tuple(
             sorted({record for atom in group for record in atom.left + atom.right}, key=_record_sort_key)
         )
-        if any(record.hypothesis_id and record.status == "ambiguous" for record in records):
-            assert len(group) == 1 and group[0].classification in {"ambiguous", "complex"}, (
-                "unresolved PSL evidence must remain a single conflict atom"
-            )
+        _validate_barrier_group(group, records)
         occurrences.extend(
             _project_occurrences(
                 block_id,

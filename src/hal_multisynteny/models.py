@@ -88,6 +88,9 @@ class ParentMappedRun:
     status: str
     source_anchor_id: str
     hypothesis_id: str = ""
+    raw_mapping_outcome: str = ""
+    inherited_barrier_status: str = ""
+    inherited_barrier_reason: str = ""
 
     def __post_init__(self) -> None:
         required = {
@@ -101,7 +104,11 @@ class ParentMappedRun:
             "source_anchor_id": self.source_anchor_id,
         }
         empty = sorted(name for name, value in required.items() if not value.strip())
-        if not self.copy_id.strip() and not (self.status == "ambiguous" and self.hypothesis_id):
+        unknown_psl_copy = self.hypothesis_id and (
+            self.status == "ambiguous" or
+            (self.status == "duplicated" and self.inherited_barrier_status == "duplicated")
+        )
+        if not self.copy_id.strip() and not unknown_psl_copy:
             empty.append("copy_id")
         if empty:
             raise ValueError(f"empty required field(s): {', '.join(empty)}")
@@ -233,9 +240,12 @@ class EdgeMappingRun:
     raw_strand_field: str = ""
     psl_line_number: int = 0
     component_order: int = 0
+    raw_mapping_outcome: str = ""
+    inherited_barrier_status: str = ""
+    inherited_barrier_reason: str = ""
 
     def __post_init__(self) -> None:
-        if self.hypothesis_id and self.status == "ambiguous" and self.copy_id:
+        if self.hypothesis_id and self.status in {"ambiguous", "duplicated"} and self.copy_id:
             raise ValueError("unresolved PSL hypotheses must not assign biological copy IDs")
         if self.child_start < 0 or self.parent_start < 0:
             raise ValueError("edge mapping coordinates must be non-negative")
@@ -268,6 +278,9 @@ class EdgeMappingRun:
             status=self.status,
             source_anchor_id=self.source_anchor_id,
             hypothesis_id=self.hypothesis_id,
+            raw_mapping_outcome=self.raw_mapping_outcome,
+            inherited_barrier_status=self.inherited_barrier_status,
+            inherited_barrier_reason=self.inherited_barrier_reason,
         )
 
 
@@ -286,6 +299,9 @@ class UnmappedEdgeEvidence:
     source_anchor_id: str
     tool: str = ""
     command: str = ""
+    raw_mapping_outcome: str = ""
+    inherited_barrier_status: str = ""
+    inherited_barrier_reason: str = ""
 
     def __post_init__(self) -> None:
         if self.child_start < 0 or self.child_end <= self.child_start:
@@ -294,3 +310,16 @@ class UnmappedEdgeEvidence:
             object.__setattr__(self, "status", "unaligned")
         if self.status != "unaligned":
             raise ValueError("unmapped edge evidence must have status=unaligned")
+
+
+@dataclass(frozen=True, slots=True)
+class EdgeBlockState:
+    """One input block's raw edge result and effective state, including no-hit inputs."""
+
+    child_block_id: str
+    raw_mapping_outcome: str
+    effective_status: str
+    inherited_barrier_status: str
+    inherited_barrier_reason: str
+    inherited_mapping_status: str
+    inherited_classification: str

@@ -2,6 +2,11 @@
 
 ## Next validation milestone - Unreleased
 
+- Preserve inherited duplication and ambiguity across conservative PSL edges,
+  separating raw outcomes from effective states and retaining barrier reasons.
+  Enforce barriers with explicit runtime checks, preserve known leaf copies,
+  handle empty extraction without HAL execution, and bump checkpoint schema to
+  0.6.0 (PSL edge schema 2, status policy 1).
 - Add the explicit experimental `hal-psl-conservative` direct-edge backend,
   sharing the audited DNA PSL parser. Preserve all multi-record hypotheses as
   ambiguous spatial barriers without assigning biological copy IDs or tracks.

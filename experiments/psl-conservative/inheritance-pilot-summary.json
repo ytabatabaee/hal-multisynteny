@@ -1,0 +1,53 @@
+{
+  "backend": "hal-psl-conservative",
+  "effective_status_counts": {
+    "ambiguous": 2,
+    "unaligned": 1,
+    "unique": 3
+  },
+  "hypotheses": 7,
+  "inheritance_probe": {
+    "effective_status_counts": {
+      "ambiguous": 1,
+      "duplicated": 1
+    },
+    "input_blocks": 2,
+    "raw_mapping_outcome_counts": {
+      "unique": 2
+    }
+  },
+  "input_blocks": 6,
+  "mapping_runs": 12,
+  "mapping_status_counts": {
+    "ambiguous": 2,
+    "unaligned": 1,
+    "unique": 3
+  },
+  "mapping_status_denominator": 6,
+  "raw_mapping_outcome_counts": {
+    "ambiguous": 2,
+    "unaligned": 1,
+    "unique": 3
+  },
+  "readiness": "controlled testing only; multi-record resolution remains unresolved",
+  "root_blocks": 4,
+  "root_leaf_occurrences": 8,
+  "root_leaves": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "run_status_counts": {
+    "ambiguous": 6,
+    "unique": 6
+  },
+  "scope": "synthetic fixtures only; no biological reconstruction",
+  "tool_versions": {
+    "halLiftover": "halLiftover v2.2: Map BED or PSL",
+    "halStats": "halStats v2.2: Retrieve basic"
+  },
+  "warnings": [
+    "Multiple PSL records are unresolved hypotheses, not biological copies; their components are ambiguity barriers and are not propagated as biological occurrences. halSynteny transitivity and general mapping-path resolution remain unestablished."
+  ]
+}

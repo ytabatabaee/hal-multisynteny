@@ -14,7 +14,7 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Protocol
 
-from .models import EdgeMappingRun, NodeBlock, UnmappedEdgeEvidence
+from .models import EdgeBlockState, EdgeMappingRun, NodeBlock, UnmappedEdgeEvidence
 from .utils import sha256_file
 
 
@@ -227,6 +227,7 @@ class EdgeExtractionResult:
     commands: tuple[tuple[str, ...], ...]
     warnings: tuple[str, ...] = ()
     artifacts: tuple[tuple[str, str], ...] = ()
+    block_states: tuple[EdgeBlockState, ...] | None = None
 
 
 class EdgeExtractor(Protocol):
@@ -365,6 +366,9 @@ class FakeEdgeExtractor:
                             row.get("raw_strand_field", ""),
                             int(row.get("psl_line_number") or 0),
                             int(row.get("component_order") or 0),
+                            row.get("raw_mapping_outcome", ""),
+                            row.get("inherited_barrier_status", ""),
+                            row.get("inherited_barrier_reason", ""),
                         )
                     )
                 except ValueError as exc:
