@@ -244,6 +244,31 @@ For a component `[q0,q1) → [t0,t1)` and intersection `[a,b)`:
 - forward: `[t0+a-q0, t0+b-q0)`;
 - reverse: `[t1-(b-q0), t1-(a-q0))`.
 
+### Piecewise PSL liftover comparator
+
+`--backend hal-psl-piecewise` is a separate experimental comparator for
+direct `halLiftover --outPSLWithName` edges. It reuses the audited PSL
+normalizer and leaves `hal-psl-conservative` unchanged. A PSL record is output
+evidence, not a biological copy. The piecewise backend partitions each input
+NodeBlock at normalized component boundaries and compares distinct target
+projections for each source atom.
+
+No projection is unaligned evidence; one projection is unique even when it
+came from several source-disjoint records; two distinct projections over one
+source atom remain ambiguous. Exact duplicate geometry is counted once for
+classification while raw rows and line numbers remain in provenance. Source-
+disjoint components that overlap in target coordinates receive a duplication
+barrier. No record, component, or fragment identifier becomes a biological
+`copy_id`.
+
+Cross-chromosome, orientation, and non-monotone-order fragments remain exact
+spatial evidence, while existing reconciliation continuity checks prevent
+merging across their boundaries. Gaps remain uncovered source evidence and
+are not called deletions. Inherited ambiguity or duplication dominates a
+current unique geometric mapping. This backend establishes a source-aware
+geometric partition only; it does not establish biological copy correspondence
+or `halLiftover` transitivity.
+
 Every projected run must have length `b-a`. Query gaps, target gaps, and uncovered
 block sequence remain gaps. Exact uncovered source intervals have no invented
 parent coordinates and are not deletion calls. Empty input blocks produce no

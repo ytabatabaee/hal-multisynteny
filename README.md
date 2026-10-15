@@ -42,6 +42,14 @@ unresolved. The existing `hal` and `hal-psl-conservative` modes remain comparato
 See [overlay architecture](docs/ARCHITECTURE.md#all-edge-halsynteny-overlay) and the
 [controlled comparison](experiments/synteny-overlay/REPORT.md).
 
+The experimental `--backend hal-psl-piecewise` is a fast liftover comparator.
+It partitions each input block by exact PSL component boundaries and treats
+source-disjoint records as mapping fragments. Only overlapping distinct target
+projections are ambiguous; duplicate geometry is one mapping with raw-row
+provenance. Cross-chromosome, orientation, order, target-overlap, and inherited
+barriers remain visible to reconciliation. It does not infer biological copy
+IDs, resolve multi-record path identity, or establish liftover transitivity.
+
 ```bash
 hal-multisynteny run-tree --backend hal-synteny-overlay \
   --leaf-init halsynteny --hal tests/fixtures/tiny_hal/build/tiny.hal \

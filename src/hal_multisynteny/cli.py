@@ -412,7 +412,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--resume", action="store_true")
     run.add_argument("--force-node")
     run.add_argument("--dry-run", action="store_true")
-    run.add_argument("--backend", choices=("fake", "hal", "hal-psl-conservative", "hal-synteny-overlay"), default="fake")
+    run.add_argument("--backend", choices=("fake", "hal", "hal-psl-conservative", "hal-psl-piecewise", "hal-synteny-overlay"), default="fake")
     run.add_argument("--fake-mappings")
     run.add_argument("--leaf-init", choices=("supplied", "halsynteny"), default="supplied")
     run.add_argument("--hal-synteny-min-block-size", type=int, default=50)

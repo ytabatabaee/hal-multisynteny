@@ -108,8 +108,8 @@ class ParentMappedRun:
             "source_anchor_id": self.source_anchor_id,
         }
         empty = sorted(name for name, value in required.items() if not value.strip())
-        unknown_psl_copy = self.hypothesis_id and (
-            self.status == "ambiguous" or
+        unknown_psl_copy = (
+            (self.status == "ambiguous" and bool(self.hypothesis_id)) or
             (self.status == "duplicated" and self.inherited_barrier_status == "duplicated")
         )
         if not self.copy_id.strip() and not (unknown_psl_copy or self.synteny_chain_id):

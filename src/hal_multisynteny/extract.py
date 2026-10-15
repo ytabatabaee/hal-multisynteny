@@ -22,7 +22,7 @@ class ExtractionError(RuntimeError):
     """Raised when edge extraction cannot produce strict parent-mapped runs."""
 
 
-HAL_BACKENDS = frozenset({"hal", "hal-psl-conservative", "hal-synteny-overlay"})
+HAL_BACKENDS = frozenset({"hal", "hal-psl-conservative", "hal-psl-piecewise", "hal-synteny-overlay"})
 
 
 def is_hal_backend(backend: str) -> bool:

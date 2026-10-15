@@ -72,3 +72,11 @@ current implementation.
 This behavior avoids fabricating coordinates. It also means unresolved unmapped
 regions are not yet carried upward in a lineage-level nonspatial table. Absence
 from a later spatial block table must not be interpreted as biological absence.
+
+The `hal-psl-piecewise` backend has a distinct edge schema and status-policy
+identity. Its provenance records per-input-block PSL record counts, normalized
+component counts, source-atom counts, covered and uncovered bases, overlap and
+chromosome/orientation/order boundary diagnostics, raw outcome, effective
+status, and inherited-barrier reason. Changing this backend or policy makes
+older conservative-PSL checkpoints stale; these artifacts describe geometric
+fragments and do not resolve biological copies.

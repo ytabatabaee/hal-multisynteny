@@ -125,7 +125,7 @@ def run_tree(
     nodes_dir = output / "nodes"
     extractor = None if config.dry_run else _build_extractor(config)
     identity = _run_identity(config, plan, leaf_blocks, hal_info)
-    if config.backend in {"hal-psl-conservative", "hal-synteny-overlay"} and extractor is not None:
+    if config.backend in {"hal-psl-conservative", "hal-psl-piecewise", "hal-synteny-overlay"} and extractor is not None:
         identity["psl_extractor"] = extractor.identity()
     plan_payload = {
         "tree_sha256": plan.tree_sha256,
@@ -381,7 +381,8 @@ def _extract_child_edge(extractor, package, child_node, parent_node, child_genom
             return extractor.from_raw(child_node, parent_node, child_genome, parent_genome, blocks,
                 raw_path.read_text(), tuple(package.manifest["command"]),
                 package.manifest.get("stdout", ""), package.manifest.get("stderr", ""))
-    if package.parent_edge_runs and package.manifest.get("parent_node") == parent_node:
+    if (package.parent_edge_runs and package.manifest.get("parent_node") == parent_node
+            and getattr(extractor, "backend", "") != "hal-psl-piecewise"):
         return EdgeExtractionResult(package.parent_edge_runs, (), "halSynteny-leaf",
             {"halSynteny": package.manifest.get("tool_version", "recorded")}, (),
             ("leaf checkpoint contains exact halSynteny fragment mappings",))
@@ -943,6 +944,10 @@ def _build_extractor(config: RunTreeConfig) -> EdgeExtractor:
             from .psl_extract import HalPslConservativeExtractor
 
             return HalPslConservativeExtractor(config.hal)
+        if config.backend == "hal-psl-piecewise":
+            from .psl_extract import HalPslPiecewiseExtractor
+
+            return HalPslPiecewiseExtractor(config.hal)
         return HalEdgeExtractor(config.hal)
     raise CheckpointError(f"unknown extraction backend: {config.backend}")
 
