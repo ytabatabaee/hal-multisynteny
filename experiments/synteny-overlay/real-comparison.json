@@ -1,0 +1,62 @@
+{
+  "child": "GCF_028389875.1",
+  "conclusion": "not evaluated: overlay timed out",
+  "failures": [
+    {
+      "backend": "hal-synteny-overlay",
+      "hal_sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+      "reason": "whole-edge halSynteny exceeded execution budget",
+      "reproduction_command": [
+        "halSynteny",
+        "data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+        "hal-ci-output/palaeognathae-overlay-edge.psl",
+        "--queryGenome",
+        "GCF_028389875.1",
+        "--targetGenome",
+        "PalaeognathaeAnc2",
+        "--minBlockSize",
+        "50",
+        "--maxAnchorDistance",
+        "1000"
+      ],
+      "stderr": null,
+      "stdout": null,
+      "timeout_seconds": 120
+    }
+  ],
+  "hal_sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+  "input_blocks": 12,
+  "maxAnchorDistance": 1000,
+  "minBlockSize": 50,
+  "parent": "PalaeognathaeAnc2",
+  "rows": [
+    {
+      "ambiguous_or_unresolved_alternative_blocks": 4,
+      "backend": "hal-psl-conservative",
+      "chain_boundary_rejections": 0,
+      "component_run_count": 59,
+      "covered_source_bases": 2339,
+      "effective_counts": {
+        "ambiguous": 4,
+        "duplicated": 0,
+        "unaligned": 4,
+        "unique": 4
+      },
+      "inherited_duplicated_blocks": 0,
+      "input_blocks": 12,
+      "mapped_blocks": 8,
+      "multiple_chromosome_blocks": 4,
+      "multiple_orientation_blocks": 1,
+      "one_sided_resulting_blocks": 59,
+      "raw_counts": {
+        "ambiguous": 4,
+        "unaligned": 4,
+        "unique": 4
+      },
+      "uncovered_source_bases": 747,
+      "unique_effective_blocks": 4,
+      "unmapped_blocks": 4
+    }
+  ],
+  "scope": "bounded inputs on one direct edge; resulting blocks are one-sided diagnostics, not reconstruction"
+}

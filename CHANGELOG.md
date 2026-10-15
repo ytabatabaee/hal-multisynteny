@@ -2,6 +2,12 @@
 
 ## Next validation milestone - Unreleased
 
+- Add experimental all-edge `hal-synteny-overlay`: exact clipping of existing
+  child blocks against audited normalized halSynteny components, independent
+  chain/copy identities, chain-boundary and gap barriers, inherited status
+  propagation, uncovered intervals, and block-based outcome statistics.
+  Reuse automatic leaf edge computations, avoid halLiftover entirely, and bump
+  checkpoint schema to 0.7.0. Add bounded backend comparison tooling.
 - Preserve inherited duplication and ambiguity across conservative PSL edges,
   separating raw outcomes from effective states and retaining barrier reasons.
   Enforce barriers with explicit runtime checks, preserve known leaf copies,

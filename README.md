@@ -34,7 +34,24 @@ inherited duplication remains a no-merge barrier, including when filtered for
 length. Known descendant copy IDs survive without assigning copies to PSL records.
 See the [inheritance validation report](experiments/psl-conservative/INHERITED_DUPLICATION.md).
 
-Checkpoint schema `0.6.0` rejects older checkpoints; use a fresh output directory.
+An additional experimental `--backend hal-synteny-overlay` runs halSynteny on
+every direct edge, including internal ancestors. It clips existing child blocks
+against exact query-side chain components rather than replacing those blocks.
+Different chains are merge barriers, and inherited duplication/ambiguity remains
+unresolved. The existing `hal` and `hal-psl-conservative` modes remain comparators.
+See [overlay architecture](docs/ARCHITECTURE.md#all-edge-halsynteny-overlay) and the
+[controlled comparison](experiments/synteny-overlay/REPORT.md).
+
+```bash
+hal-multisynteny run-tree --backend hal-synteny-overlay \
+  --leaf-init halsynteny --hal tests/fixtures/tiny_hal/build/tiny.hal \
+  --tree tests/fixtures/tiny_hal/tree.nwk \
+  --node-map tests/fixtures/tiny_hal/node-map.tsv \
+  --output-dir hal-ci-output/synteny-overlay-tiny \
+  --min-block-length 1 --hal-synteny-min-block-size 1
+```
+
+Checkpoint schema `0.7.0` rejects older checkpoints; use a fresh output directory.
 
 The input is a run-length table mapping collinear intervals in descendant
 genomes to one chosen ancestral genome in HAL. The builder:

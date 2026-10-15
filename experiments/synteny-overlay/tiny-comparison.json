@@ -1,0 +1,67 @@
+{
+  "child": "PSL_child",
+  "conclusion": "descriptive controlled comparison; no production readiness claim",
+  "failures": [],
+  "hal_sha256": "3a6e677676ce2c6c8a708400682bf5326e27cd42802702c1b365ccf2aa87fd32",
+  "input_blocks": 6,
+  "maxAnchorDistance": 1000,
+  "minBlockSize": 1,
+  "parent": "PSL_parent",
+  "rows": [
+    {
+      "ambiguous_or_unresolved_alternative_blocks": 2,
+      "backend": "hal-psl-conservative",
+      "chain_boundary_rejections": 0,
+      "component_run_count": 12,
+      "covered_source_bases": 120,
+      "effective_counts": {
+        "ambiguous": 2,
+        "duplicated": 0,
+        "unaligned": 1,
+        "unique": 3
+      },
+      "inherited_duplicated_blocks": 0,
+      "input_blocks": 6,
+      "mapped_blocks": 5,
+      "multiple_chromosome_blocks": 1,
+      "multiple_orientation_blocks": 1,
+      "one_sided_resulting_blocks": 7,
+      "raw_counts": {
+        "ambiguous": 2,
+        "unaligned": 1,
+        "unique": 3
+      },
+      "uncovered_source_bases": 20,
+      "unique_effective_blocks": 3,
+      "unmapped_blocks": 1
+    },
+    {
+      "ambiguous_or_unresolved_alternative_blocks": 0,
+      "backend": "hal-synteny-overlay",
+      "chain_boundary_rejections": 3,
+      "component_run_count": 12,
+      "covered_source_bases": 120,
+      "effective_counts": {
+        "ambiguous": 0,
+        "duplicated": 0,
+        "unaligned": 1,
+        "unique": 5
+      },
+      "inherited_duplicated_blocks": 0,
+      "input_blocks": 6,
+      "mapped_blocks": 5,
+      "multiple_chromosome_blocks": 1,
+      "multiple_orientation_blocks": 1,
+      "one_sided_resulting_blocks": 7,
+      "raw_counts": {
+        "ambiguous": 0,
+        "unaligned": 1,
+        "unique": 5
+      },
+      "uncovered_source_bases": 20,
+      "unique_effective_blocks": 5,
+      "unmapped_blocks": 1
+    }
+  ],
+  "scope": "bounded inputs on one direct edge; resulting blocks are one-sided diagnostics, not reconstruction"
+}

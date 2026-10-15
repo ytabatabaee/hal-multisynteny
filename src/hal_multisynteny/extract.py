@@ -22,7 +22,7 @@ class ExtractionError(RuntimeError):
     """Raised when edge extraction cannot produce strict parent-mapped runs."""
 
 
-HAL_BACKENDS = frozenset({"hal", "hal-psl-conservative"})
+HAL_BACKENDS = frozenset({"hal", "hal-psl-conservative", "hal-synteny-overlay"})
 
 
 def is_hal_backend(backend: str) -> bool:
@@ -140,6 +140,11 @@ def parse_halsynteny_psl(
         rows.append({"fields": tuple(fields), "qkey": (fields[9], qsize, tuple(q_intervals)),
                      "qname": fields[9], "tname": fields[13], "q_intervals": tuple(q_intervals),
                      "t_intervals": tuple(t_intervals), "strand": "+" if qstrand == tstrand else "-"})
+    return _leaf_blocks_from_rows(rows, child_node, parent_node, command)
+
+
+def _leaf_blocks_from_rows(rows, child_node, parent_node, command):
+    """Shared query-family construction; coordinates are already normalized."""
     rows.sort(key=lambda row: (row["qkey"], row["fields"]))
     families: dict[tuple[object, ...], list[dict[str, object]]] = {}
     for row in rows:
@@ -148,12 +153,17 @@ def parse_halsynteny_psl(
     all_runs: list[EdgeMappingRun] = []
     family_keys = sorted(families, key=repr)
     overlapping_families: set[tuple[object, ...]] = set()
-    for index, first_key in enumerate(family_keys):
-        for second_key in family_keys[index + 1:]:
-            if first_key[0] != second_key[0]:
-                continue
-            if any(a[0] < b[1] and b[0] < a[1] for a in first_key[2] for b in second_key[2]):
-                overlapping_families.update((first_key, second_key))
+    by_chrom = {}
+    for family_key in family_keys:
+        by_chrom.setdefault(family_key[0], []).extend((start, end, family_key) for start, end in family_key[2])
+    for intervals in by_chrom.values():
+        active = []
+        for start, end, key in sorted(intervals):
+            active = [(stop, other) for stop, other in active if stop > start]
+            for _, other in active:
+                if other != key:
+                    overlapping_families.update((key, other))
+            active.append((end, key))
     for family_key, alternatives in sorted(families.items(), key=lambda item: repr(item[0])):
         digest = hashlib.sha256(repr(family_key).encode()).hexdigest()[:16]
         block_id = f"HSB_{digest}"
@@ -198,24 +208,35 @@ class HalSyntenyLeafInitializer:
 
     def initialize(self, child_node: str, parent_node: str, query_genome: str, target_genome: str) -> HalSyntenyLeafResult:
         version = self.probe_version()
-        with tempfile.TemporaryDirectory(prefix="hms-synteny-") as temp_name:
-            output = Path(temp_name) / "halsynteny.psl"
-            help_run = subprocess.run((self.executable, "--help"), check=False, capture_output=True, text=True)
-            command = build_halsynteny_command(self.executable, self.hal_path, output.name, query_genome, target_genome,
-                                               self.min_block_size, self.max_anchor_distance, help_run.stdout + help_run.stderr)
-            completed = subprocess.run(command, check=False, capture_output=True, text=True, cwd=temp_name)
-            if completed.returncode:
-                raise ExtractionError(f"halSynteny failed with exit {completed.returncode}: {completed.stderr.strip()}")
-            raw = output.read_text(encoding="utf-8") if output.exists() else completed.stdout
+        raw, command, stdout, stderr = run_halsynteny(self, query_genome, target_genome, allow_stdout=True)
         blocks, runs = parse_halsynteny_psl(raw, child_node=child_node, parent_node=parent_node,
                                            query_genome=query_genome, target_genome=target_genome, command=command)
-        return HalSyntenyLeafResult(blocks, runs, raw, command, completed.stdout, completed.stderr,
+        return HalSyntenyLeafResult(blocks, runs, raw, command, stdout, stderr,
                                     {"halSynteny": version}, str(self.executable), version)
 
     def probe_version(self) -> str:
         if not self.executable_version:
             self.executable_version = _probe_version(self.executable)
         return self.executable_version
+
+
+def run_halsynteny(initializer, query_genome: str, target_genome: str, *, allow_stdout: bool = False):
+    """Shared whole-edge execution; parsing and overlay are separate operations."""
+    with tempfile.TemporaryDirectory(prefix="hms-synteny-") as temp_name:
+        output = Path(temp_name) / "halsynteny.psl"
+        help_run = subprocess.run((initializer.executable, "--help"), check=False, capture_output=True, text=True)
+        command = build_halsynteny_command(initializer.executable, initializer.hal_path.resolve(), output.name,
+            query_genome, target_genome, initializer.min_block_size, initializer.max_anchor_distance,
+            help_run.stdout + help_run.stderr)
+        completed = subprocess.run(command, check=False, capture_output=True, text=True, cwd=temp_name,
+                                   timeout=getattr(initializer, "execution_timeout", None))
+        if completed.returncode:
+            raise ExtractionError(f"halSynteny failed with exit {completed.returncode}: {completed.stderr.strip()}")
+        if not output.is_file():
+            if allow_stdout:
+                return completed.stdout, command, completed.stdout, completed.stderr
+            raise ExtractionError("halSynteny did not create halsynteny.psl")
+        return output.read_text(encoding="utf-8"), command, completed.stdout, completed.stderr
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +249,7 @@ class EdgeExtractionResult:
     warnings: tuple[str, ...] = ()
     artifacts: tuple[tuple[str, str], ...] = ()
     block_states: tuple[EdgeBlockState, ...] | None = None
+    edge_statistics: dict[str, object] | None = None
 
 
 class EdgeExtractor(Protocol):
@@ -369,6 +391,8 @@ class FakeEdgeExtractor:
                             row.get("raw_mapping_outcome", ""),
                             row.get("inherited_barrier_status", ""),
                             row.get("inherited_barrier_reason", ""),
+                            row.get("synteny_chain_id", ""),
+                            row.get("component_id", ""),
                         )
                     )
                 except ValueError as exc:

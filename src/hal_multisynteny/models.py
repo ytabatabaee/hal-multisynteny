@@ -91,8 +91,12 @@ class ParentMappedRun:
     raw_mapping_outcome: str = ""
     inherited_barrier_status: str = ""
     inherited_barrier_reason: str = ""
+    synteny_chain_id: str = ""
+    component_id: str = ""
 
     def __post_init__(self) -> None:
+        if self.synteny_chain_id and self.copy_id:
+            raise ValueError("overlay chains must not assign biological copy IDs")
         required = {
             "child_node": self.child_node,
             "child_block_id": self.child_block_id,
@@ -108,7 +112,7 @@ class ParentMappedRun:
             self.status == "ambiguous" or
             (self.status == "duplicated" and self.inherited_barrier_status == "duplicated")
         )
-        if not self.copy_id.strip() and not unknown_psl_copy:
+        if not self.copy_id.strip() and not (unknown_psl_copy or self.synteny_chain_id):
             empty.append("copy_id")
         if empty:
             raise ValueError(f"empty required field(s): {', '.join(empty)}")
@@ -243,8 +247,12 @@ class EdgeMappingRun:
     raw_mapping_outcome: str = ""
     inherited_barrier_status: str = ""
     inherited_barrier_reason: str = ""
+    synteny_chain_id: str = ""
+    component_id: str = ""
 
     def __post_init__(self) -> None:
+        if self.synteny_chain_id and self.copy_id:
+            raise ValueError("overlay chains must not assign biological copy IDs")
         if self.hypothesis_id and self.status in {"ambiguous", "duplicated"} and self.copy_id:
             raise ValueError("unresolved PSL hypotheses must not assign biological copy IDs")
         if self.child_start < 0 or self.parent_start < 0:
@@ -281,6 +289,8 @@ class EdgeMappingRun:
             raw_mapping_outcome=self.raw_mapping_outcome,
             inherited_barrier_status=self.inherited_barrier_status,
             inherited_barrier_reason=self.inherited_barrier_reason,
+            synteny_chain_id=self.synteny_chain_id,
+            component_id=self.component_id,
         )
 
 

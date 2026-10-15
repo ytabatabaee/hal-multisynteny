@@ -1,0 +1,2 @@
+ambiguous_or_unresolved_alternative_blocks	backend	chain_boundary_rejections	component_run_count	covered_source_bases	effective_counts	inherited_duplicated_blocks	input_blocks	mapped_blocks	multiple_chromosome_blocks	multiple_orientation_blocks	one_sided_resulting_blocks	raw_counts	uncovered_source_bases	unique_effective_blocks	unmapped_blocks
+4	hal-psl-conservative	0	59	2339	"{""ambiguous"": 4, ""duplicated"": 0, ""unaligned"": 4, ""unique"": 4}"	0	12	8	4	1	59	"{""ambiguous"": 4, ""unaligned"": 4, ""unique"": 4}"	747	4	4

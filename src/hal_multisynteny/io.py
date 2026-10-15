@@ -65,6 +65,8 @@ PARENT_RUN_FIELDS = PARENT_RUN_CORE_FIELDS + (
     "raw_mapping_outcome",
     "inherited_barrier_status",
     "inherited_barrier_reason",
+    "synteny_chain_id",
+    "component_id",
 )
 
 NODE_BLOCK_FIELDS = (
@@ -135,6 +137,8 @@ EDGE_MAPPING_FIELDS = EDGE_MAPPING_CORE_FIELDS + (
     "raw_mapping_outcome",
     "inherited_barrier_status",
     "inherited_barrier_reason",
+    "synteny_chain_id",
+    "component_id",
 )
 
 UNMAPPED_EDGE_FIELDS = (
@@ -238,6 +242,8 @@ def read_parent_runs(path: str | Path) -> list[ParentMappedRun]:
                         raw_mapping_outcome=row.get("raw_mapping_outcome", ""),
                         inherited_barrier_status=row.get("inherited_barrier_status", ""),
                         inherited_barrier_reason=row.get("inherited_barrier_reason", ""),
+                        synteny_chain_id=row.get("synteny_chain_id", ""),
+                        component_id=row.get("component_id", ""),
                     )
                 )
             except (KeyError, ValueError) as exc:
@@ -373,6 +379,8 @@ def read_edge_mapping_runs(path: str | Path) -> list[EdgeMappingRun]:
                         row.get("raw_mapping_outcome", ""),
                         row.get("inherited_barrier_status", ""),
                         row.get("inherited_barrier_reason", ""),
+                        row.get("synteny_chain_id", ""),
+                        row.get("component_id", ""),
                     )
                 )
             except (KeyError, ValueError) as exc:

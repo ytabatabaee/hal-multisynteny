@@ -22,6 +22,7 @@ def inspect_hal(
     *,
     required_genomes: list[str] | None = None,
     metadata_level: str = "basic",
+    require_liftover: bool = True,
 ) -> dict[str, object]:
     path = Path(hal_path)
     if not path.is_file():
@@ -32,7 +33,7 @@ def inspect_hal(
     hal_liftover = shutil.which("halLiftover")
     if not hal_stats:
         raise HalPreflightError("missing HAL tool: halStats is not on PATH")
-    if not hal_liftover:
+    if require_liftover and not hal_liftover:
         raise HalPreflightError("missing HAL tool: halLiftover is not on PATH")
 
     if metadata_level not in {"basic", "sequences"}:
@@ -57,7 +58,8 @@ def inspect_hal(
         "sequence_lengths": sequence_lengths,
         "tools": {
             "halStats": {"path": hal_stats, "version": _probe_version(hal_stats)},
-            "halLiftover": {"path": hal_liftover, "version": _probe_version(hal_liftover)},
+            **({"halLiftover": {"path": hal_liftover, "version": _probe_version(hal_liftover)}}
+               if require_liftover else {}),
         },
         "commands": [
             [hal_stats, str(path), "--genomes"],

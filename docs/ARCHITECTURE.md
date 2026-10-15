@@ -187,7 +187,7 @@ are emitted only when the extraction supplies explicit block states; they are no
 invented for legacy BED6 or stored halSynteny runs. Other backends retain their
 existing logical-occurrence accounting.
 
-The checkpoint schema is now `0.6.0` (independently of package release version).
+The checkpoint schema is now `0.7.0` (independently of package release version).
 Resume identity contains backend, parser and edge-schema versions, HAL checksum,
 direct parent map, tool paths, executable checksums and help-derived versions,
 plus status-policy version 1. The audited parser remains version 2; the PSL edge
@@ -217,3 +217,142 @@ tree with halSynteny initialization. Raw outputs and
 the generated HAL remain ignored. This validates pipeline mechanics, not full
 clade readiness; multi-record mapping-path identity remains unresolved and
 halSynteny transitivity remains unproven.
+
+## All-edge halSynteny overlay
+
+`hal-synteny-overlay` is an experimental third HAL-backed mode. HAL's
+[documentation](https://github.com/ComparativeGenomicsToolkit/hal#halsynteny)
+describes halSynteny as adding chaining to liftover alignments. This backend uses
+that chain information on every direct child→parent edge. It never invokes the
+halLiftover executable, including during preflight. The BED6 `hal` and direct
+PSL `hal-psl-conservative` backends retain their prior interpretation and remain
+useful controls for coverage, coordinate mapping, and unresolved alternatives.
+
+Re-running unconstrained halSynteny and replacing an internal node's blocks
+would discard the reconciliation already performed below that node. Instead,
+`HalSyntenyEdgeExtractor` obtains whole-edge chains and
+`overlay_node_blocks_on_chains` intersects the existing NodeBlocks with each
+query component. Child block IDs survive the overlay. The shared command runner
+uses installed `--minBlockSize` and `--maxAnchorDistance` options. The overlay
+parser adapts ordinary 21-column PSL to the audited `parse_psl_record` normalizer;
+no new strand interpretation is introduced. Overlay leaf initialization uses
+that same audited normalizer and shares the legacy family/block constructor.
+Existing backend leaf parsers, family semantics, and output layout are retained.
+
+For a component `[q0,q1) → [t0,t1)` and intersection `[a,b)`:
+
+- forward: `[t0+a-q0, t0+b-q0)`;
+- reverse: `[t1-(b-q0), t1-(a-q0))`.
+
+Every projected run must have length `b-a`. Query gaps, target gaps, and uncovered
+block sequence remain gaps. Exact uncovered source intervals have no invented
+parent coordinates and are not deletion calls. Empty input blocks produce no
+runs; whole-edge extraction still computes the edge's chains, independent of the
+current block set.
+
+### Chains, alternatives, occurrences, and copies
+
+A `HalSyntenyChain` is one normalized halSynteny output mapping. Its ID hashes
+normalized sequence/component coordinates and relative orientation, locally to
+an edge, excluding raw line order. Equivalent output rows share one normalized
+chain with all raw line references preserved. Components have distinct stable
+IDs within that chain. Raw query/explicit target strand and relative orientation
+are retained separately; equivalent strand-frame representations retain their
+original rows in raw PSL. Neither chain ID nor component number is a copy ID.
+
+A child block has one logical `child_occurrence_id`, even when it intersects
+many components or chains. Source-disjoint chains are separate unique synteny
+pieces. Overlapping source coverage from distinct normalized mappings is an
+unresolved local alternative (raw ambiguous, effective duplicated). This policy
+is conservative even if two records share part of the same target placement.
+Exact equivalent mappings are deduplicated before alternatives are assessed.
+Different target chromosomes and relative orientations remain observations, not
+an instruction to concatenate pieces or match copies between children.
+
+All overlay runs have empty biological `copy_id`; the data model rejects
+nonempty copy IDs on chain-tagged runs. A chain ID is also retained as the
+mapping hypothesis reference, separately from copy identity. Unique pieces and
+single-path inherited duplicated evidence project the child's known leaf
+occurrences, preserving their copy IDs and clipped source coordinates. Current
+unresolved alternatives and effective ambiguity remain diagnostic spatial
+barriers and are withheld from biological occurrence projection; original known
+copies remain in the child checkpoint. This deliberately withholds unresolved
+tracks rather than multiplying them across hypotheses. Existing automatic leaf
+checkpoints retain their established local copy labels; overlay never assigns
+new copy identities from those edge chains.
+
+### Effective state and merge barriers
+
+No overlap gives raw/effective unaligned and retains inherited causes in
+provenance. Otherwise:
+
+1. inherited ambiguous status or ambiguous/complex classification → ambiguous;
+2. inherited duplicated status or duplication_conflict classification → duplicated;
+3. overlapping chain alternatives → duplicated;
+4. one or more source-disjoint chain pieces → unique.
+
+Raw outcomes describe the overlay alone: unaligned, unique pieces, or ambiguous
+alternatives. Inherited ambiguity dominates duplication even when there is only
+one chain. Standalone orientation/order conflicts retain their existing rules;
+complex classifications propagate ambiguity. No chain resolves old duplication.
+
+`merge_decision` rejects a change of chain membership on either child side with
+`synteny_chain_boundary`. Same-chain components can merge only with zero parent
+gap, exact directional source adjacency, consistent orientation, and all existing
+continuity checks satisfied. A gap is rejected with `synteny_component_gap`,
+regardless of permissive general thresholds. Filtered atoms still stop the scan
+from bridging; chain boundaries crossed through filtered evidence are also
+reported. Explicit runtime checks reject a retained merged group that crosses
+chains on the same child side. Existing conflict/barrier checks remain active.
+The general greedy grouping algorithm and default thresholds are unchanged.
+
+### Execution, checkpoints, and statistics
+
+For n leaves, a fresh full traversal computes 2n−2 direct halSynteny edges and
+performs n−1 sibling reconciliations. With `--leaf-init halsynteny`, the four
+leaf-edge computations in a four-leaf tree initialize leaves; their preserved
+raw PSL is then overlaid without rerunning those edges. Two more computations
+map the reconciled internal nodes upward. Supplied leaf blocks use the same
+extractor on all six edges. Complete resume reuses checkpoints without new edge
+computations. Force/recompute operations may intentionally rerun affected edges.
+
+Checkpoint schema 0.7.0 adds optional `synteny_chain_id` and `component_id` columns
+to edge/parent-run TSVs, including fake-reader compatibility. Legacy TSVs remain
+readable; old checkpoints are stale. Overlay schema/status policy are version 1;
+identity includes the audited parser and inherited-policy versions, backend,
+HAL checksum/direct parent map, executable paths/checksums/versions, minBlockSize,
+and maxAnchorDistance. Changing any scientific input or policy invalidates reuse.
+
+Each internal checkpoint contains both `left_` and `right_` variants of:
+
+- `raw_halsynteny.psl`, `halsynteny_stdout.txt`, `halsynteny_stderr.txt`;
+- `synteny_chains.tsv`, existing `edge_runs.tsv` and `unmapped_edge_evidence.tsv`;
+- `uncovered_edge_evidence.tsv` with exact source gaps;
+- `overlay_block_states.tsv` with raw/effective states and inherited reasons;
+- `overlay_block_observations.tsv` with per-input chain/chromosome/orientation and base counts;
+- `overlay_statistics.json`, `overlay_provenance.json` with exact command and edge identities.
+
+All artifacts are included in manifest output checksums. Side-specific overlay
+statistics also enter node `summary.json` and deterministic postorder
+`node_statistics.tsv`. Existing classification/merge tables and tree-wide
+`node_classifications.tsv` and `merge_rejection_summary.tsv` remain available.
+Side statistics include final joint parent-block count and chain-boundary merge
+rejections attributable to that side; node merge rejection counts are the joint
+scan's decisions. The edge artifact's statistics describe extraction before
+sibling reconciliation and therefore omit joint reconciliation results.
+
+Raw/effective outcome denominators are input child blocks, never chains,
+components, hypotheses, or descendant copies. Categories partition that set:
+no overlap, one chain, multiple source-disjoint chains, overlapping alternatives.
+Chromosome/orientation observations may overlap those categories. Inherited
+barrier counts use the precedence-selected inherited status. Source base totals
+are unions within each input block (then summed across inputs), without double
+counting alternative coverage. Mapped plus unmapped blocks, raw/effective totals,
+and covered plus uncovered input bases must reconcile exactly. Whole-edge chain
+and component counts include chains outside the input sample; mapped component
+runs are reported separately. No denominator is a genome-wide biological rate.
+
+This remains a controlled-testing backend. Multi-record/chain path identity,
+cross-child copy correspondence, duplication resolution, and halSynteny
+transitivity are unestablished. Synthetic results alone do not authorize a full
+Palaeognathae reconstruction.

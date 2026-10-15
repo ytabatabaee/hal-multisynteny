@@ -1,0 +1,16 @@
+{
+  "backend": "hal-synteny-overlay",
+  "edge_computations": 6,
+  "hal_liftover_invocations": 0,
+  "leaves": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "root_blocks": 4,
+  "root_leaf_occurrences": 6,
+  "scope": "real HAL tools on synthetic four-leaf fixture only",
+  "sibling_reconciliations": 3,
+  "validation": "integration tests additionally verify copies, resume, and repeated-run byte identity"
+}

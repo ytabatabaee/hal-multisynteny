@@ -372,3 +372,44 @@ def test_real_hal_single_record_preserves_inherited_duplication(tiny_hal_manifes
                                 config=ReconcileConfig(min_block_length=1, boundary_tolerance=100, max_merge_gap=100))
     assert reconciled.blocks[0].classification == "duplication_conflict"
     assert reconciled.blocks[0].mapping_quality == "duplicated"
+
+
+def test_real_all_edge_synteny_overlay_tree(tiny_hal_manifest, tmp_path, monkeypatch):
+    if not shutil.which('halSynteny'):
+        pytest.skip('halSynteny is not installed')
+    actual_run = subprocess.run
+    calls = []
+
+    def monitored(command, *args, **kwargs):
+        name = Path(command[0]).name
+        if name == 'halLiftover':
+            pytest.fail('overlay invoked halLiftover')
+        if name == 'halSynteny' and '--queryGenome' in command:
+            calls.append((command[command.index('--queryGenome')+1], command[command.index('--targetGenome')+1]))
+        return actual_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, 'run', monitored)
+    fixture = Path(str(tiny_hal_manifest['_fixture_dir']))
+    config = RunTreeConfig(backend='hal-synteny-overlay', leaf_init='halsynteny', hal=str(tiny_hal_manifest['_hal_path']),
+                           min_block_length=1, hal_synteny_min_block_size=1)
+    output = tmp_path/'overlay'
+    args = {"tree_path": fixture/'tree.nwk', "node_map_path": fixture/'node-map.tsv', "leaf_blocks": None}
+    run_tree(**args, output_dir=output, config=config)
+    assert len(calls) == len(set(calls)) == 6
+    root = load_package(output/'nodes/root','root','HAL_root')
+    assert root.blocks and {o.leaf for o in root.leaf_occurrences} == {'A','B','C','D'}
+    assert [(b.start,b.end,b.classification) for b in root.blocks] == [
+        (0,10,'shared_consistent'),(20,30,'ambiguous'),(60,70,'left_only'),(80,90,'left_only')]
+    assert len(root.leaf_occurrences) == 6
+    assert not any(o.node_start == 20 for o in root.leaf_occurrences)
+    copies = {(o.leaf,o.copy_id) for leaf in 'ABCD'
+              for o in load_package(output/'nodes'/leaf,leaf,f'HAL_{leaf}').leaf_occurrences}
+    assert {(o.leaf,o.copy_id) for o in root.leaf_occurrences} <= copies
+    before = {p.relative_to(output):p.read_bytes() for p in output.rglob('*') if p.is_file() and p.name != 'run-summary.json'}
+    from dataclasses import replace
+    run_tree(**args, output_dir=output, config=replace(config,resume=True))
+    assert len(calls) == 6
+    assert all((output/p).read_bytes() == value for p,value in before.items())
+    run_tree(**args, output_dir=tmp_path/'repeat', config=config)
+    assert len(calls) == 12
+    assert all((tmp_path/'repeat'/p).read_bytes() == value for p,value in before.items())

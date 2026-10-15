@@ -56,7 +56,7 @@ class CheckpointError(RuntimeError):
     """Raised for stale, incomplete, or invalid checkpoint packages."""
 
 
-CHECKPOINT_SCHEMA_VERSION = "0.6.0"
+CHECKPOINT_SCHEMA_VERSION = "0.7.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +116,8 @@ def run_tree(
     if is_hal_backend(config.backend) and not config.dry_run:
         provisional_plan = build_traversal_plan(tree_path, node_map_path)
         required = sorted(set(provisional_plan.node_to_hal.values()))
-        hal_info = inspect_hal(config.hal or "", required_genomes=required, metadata_level="basic")
+        hal_info = inspect_hal(config.hal or "", required_genomes=required, metadata_level="basic",
+                               **({"require_liftover": False} if config.backend == "hal-synteny-overlay" else {}))
         plan = build_traversal_plan(tree_path, node_map_path, hal_info["parent_map"])
     else:
         plan = build_traversal_plan(tree_path, node_map_path)
@@ -124,7 +125,7 @@ def run_tree(
     nodes_dir = output / "nodes"
     extractor = None if config.dry_run else _build_extractor(config)
     identity = _run_identity(config, plan, leaf_blocks, hal_info)
-    if config.backend == "hal-psl-conservative" and extractor is not None:
+    if config.backend in {"hal-psl-conservative", "hal-synteny-overlay"} and extractor is not None:
         identity["psl_extractor"] = extractor.identity()
     plan_payload = {
         "tree_sha256": plan.tree_sha256,
@@ -296,8 +297,12 @@ def _init_leaf_packages_from_plan(
     if config.leaf_init == "halsynteny":
         if not is_hal_backend(config.backend) or not config.hal:
             raise CheckpointError("--leaf-init halsynteny requires --hal and a HAL-backed backend")
-        initializer = HalSyntenyLeafInitializer(config.hal, min_block_size=config.hal_synteny_min_block_size,
-                                                 max_anchor_distance=config.hal_synteny_max_anchor_distance)
+        initializer_class = HalSyntenyLeafInitializer
+        if config.backend == "hal-synteny-overlay":
+            from .synteny_overlay import HalSyntenyOverlayLeafInitializer
+            initializer_class = HalSyntenyOverlayLeafInitializer
+        initializer = initializer_class(config.hal, min_block_size=config.hal_synteny_min_block_size,
+                                         max_anchor_distance=config.hal_synteny_max_anchor_distance)
         _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializer, resume)
         return
     if leaf_blocks is None:
@@ -370,6 +375,12 @@ def _init_leaf_packages_from_plan(
 
 
 def _extract_child_edge(extractor, package, child_node, parent_node, child_genome, parent_genome, blocks):
+    if getattr(extractor, "backend", "") == "hal-synteny-overlay" and package.manifest.get("kind") == "leaf":
+        raw_path = package.path / "raw_halsynteny.psl"
+        if raw_path.exists():
+            return extractor.from_raw(child_node, parent_node, child_genome, parent_genome, blocks,
+                raw_path.read_text(), tuple(package.manifest["command"]),
+                package.manifest.get("stdout", ""), package.manifest.get("stderr", ""))
     if package.parent_edge_runs and package.manifest.get("parent_node") == parent_node:
         return EdgeExtractionResult(package.parent_edge_runs, (), "halSynteny-leaf",
             {"halSynteny": package.manifest.get("tool_version", "recorded")}, (),
@@ -383,6 +394,16 @@ def _update_node_statistics(result, left_package, right_package, left_result, ri
         object.__setattr__(result, "statistics", {})
     sides = (("left", left_package, left_result), ("right", right_package, right_result))
     for side, package, extraction in sides:
+        if extraction.edge_statistics is not None:
+            edge_stats = dict(extraction.edge_statistics)
+            edge_stats["final_joint_parent_block_count"] = len(result.blocks)
+            edge_stats["chain_boundary_merge_rejection_count"] = sum(
+                "synteny_chain_boundary" in decision.rejection_reasons and len({
+                    run.synteny_chain_id for run in extraction.runs
+                    if run.synteny_chain_id and run.parent_chrom == decision.parent_chrom and
+                       run.parent_start < decision.right_end and run.parent_end > decision.left_start
+                }) > 1 for decision in result.merge_decisions)
+            result.statistics[f"{side}_overlay_statistics"] = edge_stats
         input_blocks = {block.block_id for block in package.blocks}
         mapped_blocks = {run.child_block_id for run in extraction.runs}
         unmapped_evidence_blocks = {evidence.child_block_id for evidence in extraction.unmapped}
@@ -914,6 +935,10 @@ def _build_extractor(config: RunTreeConfig) -> EdgeExtractor:
     if is_hal_backend(config.backend):
         if not config.hal:
             raise CheckpointError("--hal is required for the HAL backend")
+        if config.backend == "hal-synteny-overlay":
+            from .synteny_overlay import HalSyntenyEdgeExtractor
+            return HalSyntenyEdgeExtractor(config.hal, min_block_size=config.hal_synteny_min_block_size,
+                max_anchor_distance=config.hal_synteny_max_anchor_distance)
         if config.backend == "hal-psl-conservative":
             from .psl_extract import HalPslConservativeExtractor
 

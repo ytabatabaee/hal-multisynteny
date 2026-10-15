@@ -351,7 +351,7 @@ def _biological_track_count(occurrences: Iterable[ReconciledOccurrence]) -> int:
                 occurrence.copy_id,
             )
             for occurrence in occurrences
-            if not (occurrence.status == "duplicated" and not occurrence.copy_id)
+            if occurrence.copy_id
         }
     )
 
@@ -377,7 +377,7 @@ def _classify(
         return "unaligned"
     if has_usable and (ambiguous or unaligned):
         return "complex"
-    if any(record.status == "duplicated" and record.inherited_barrier_status == "duplicated"
+    if any(record.status == "duplicated" and (record.inherited_barrier_status == "duplicated" or record.synteny_chain_id)
            for record in all_records):
         return "duplication_conflict"
     if usable_left and not usable_right:
@@ -506,6 +506,24 @@ def merge_decision(
     if any(record.status == "duplicated" and record.inherited_barrier_status == "duplicated"
            for record in previous.left + previous.right + current.left + current.right):
         reasons.append("inherited_duplication")
+    if any(record.status == "duplicated" and record.synteny_chain_id
+           for record in previous.left + previous.right + current.left + current.right):
+        reasons.append("duplication_conflict")
+    for side in ("left", "right"):
+        before = previous.left if side == "left" else previous.right
+        after = current.left if side == "left" else current.right
+        chain_before = {r.synteny_chain_id for r in before if r.synteny_chain_id}
+        chain_after = {r.synteny_chain_id for r in after if r.synteny_chain_id}
+        if chain_before or chain_after:
+            if chain_before != chain_after:
+                reasons.append("synteny_chain_boundary")
+            # Even within a chain, no relaxed threshold may bridge a gap.
+            elif gap != 0 or any(
+                (first.end != second.start if first.strand == "+" else second.end != first.start)
+                for first in before for second in after
+                if first.synteny_chain_id == second.synteny_chain_id and first != second
+            ):
+                reasons.append("synteny_component_gap")
     if reasons:
         return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
                              False, "", tuple(reasons), gap, _child_gap_text(previous, current, "left"),
@@ -650,7 +668,8 @@ def _project_occurrences(
 ) -> list[ReconciledOccurrence]:
     grouped: dict[tuple[object, ...], list[_ProjectedPiece]] = defaultdict(list)
     for record in records:
-        if record.hypothesis_id and record.status == "ambiguous":
+        if record.hypothesis_id and (record.status == "ambiguous" or
+                (record.synteny_chain_id and record.raw_mapping_outcome == "ambiguous")):
             # PSL hypotheses provide spatial barriers, never biological tracks.
             # Exact components and record identity remain in edge evidence.
             continue
@@ -750,10 +769,17 @@ def _project_occurrences(
 
 
 def _validate_barrier_group(group: list[_Atom], records: tuple[ParentMappedRun, ...]) -> None:
+    if len(group) > 1:
+        chains_by_child: dict[str, set[str]] = defaultdict(set)
+        for record in records:
+            if record.synteny_chain_id:
+                chains_by_child[record.child_node].add(record.synteny_chain_id)
+        if any(len(chains) > 1 for chains in chains_by_child.values()):
+            raise BarrierInvariantError("synteny_chain_boundary escaped its merge barrier")
     if (any(record.hypothesis_id and record.status == "ambiguous" for record in records)
             and (len(group) != 1 or group[0].classification not in {"ambiguous", "complex"})):
         raise BarrierInvariantError("unresolved PSL ambiguity must remain a single conflict atom")
-    if (any(record.status == "duplicated" and record.inherited_barrier_status == "duplicated"
+    if (any(record.status == "duplicated" and (record.inherited_barrier_status == "duplicated" or record.synteny_chain_id)
             for record in records)
             and (len(group) != 1 or group[0].classification not in {"duplication_conflict", "complex"})):
         raise BarrierInvariantError("inherited_duplication must remain a single conflict atom")
@@ -800,15 +826,22 @@ def reconcile_node(
     groups: list[list[_Atom]] = []
     decisions: list[MergeDecision] = []
     hit_barrier = False
+    filtered_chains: set[tuple[str, str]] = set()
     for atom in atoms:
         if not atom.retained:
             hit_barrier = True
+            filtered_chains.update((r.child_node, r.synteny_chain_id) for r in atom.left + atom.right if r.synteny_chain_id)
             continue
         if groups and hit_barrier:
             previous = groups[-1][-1]
             base = merge_decision(previous, atom, config, parent_node, intervening_filtered=True)
+            crossed = filtered_chains | {(r.child_node, r.synteny_chain_id)
+                for r in previous.left + previous.right + atom.left + atom.right if r.synteny_chain_id}
+            chain_boundary = any(len({chain for node, chain in crossed if node == child}) > 1
+                                 for child, _ in crossed)
             decisions.append(MergeDecision(base.parent_node, base.parent_chrom, base.left_start, base.left_end,
-                base.right_start, base.right_end, False, "", tuple(dict.fromkeys(base.rejection_reasons + ("intervening_filtered_atom",))),
+                base.right_start, base.right_end, False, "", tuple(dict.fromkeys(base.rejection_reasons + ("intervening_filtered_atom",) +
+                    (("synteny_chain_boundary",) if chain_boundary else ()))),
                 base.parent_gap, base.left_child_gaps, base.right_child_gaps))
             groups.append([atom])
         elif groups:
@@ -821,6 +854,7 @@ def reconcile_node(
         else:
             groups.append([atom])
         hit_barrier = False
+        filtered_chains.clear()
 
     blocks: list[ParentBlock] = []
     occurrences: list[ReconciledOccurrence] = []

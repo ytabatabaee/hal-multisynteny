@@ -197,7 +197,7 @@ def test_four_leaf_fake_tree_end_to_end_resume_force_and_dry_run(tmp_path):
     assert {row.leaf for row in leaf_occurrences} == {"A", "B", "C", "D"}
     assert all(row.node == "root" and row.node_start == 0 and row.node_end == 100 for row in leaf_occurrences)
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["schema_version"] == "0.6.0"
+    assert manifest["schema_version"] == "0.7.0"
     first_bytes = {path.name: path.read_bytes() for path in sorted(root.iterdir()) if path.is_file()}
 
     run_tree(
