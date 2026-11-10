@@ -1,0 +1,19 @@
+{
+  "status": "blocked",
+  "hal": {
+    "path": "data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+    "bytes": 7470552826,
+    "sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831"
+  },
+  "guide_tree": null,
+  "node_map": null,
+  "leaf_seed_blocks": null,
+  "stored_edge_runs": null,
+  "hal_tools": {
+    "halStats": null,
+    "halLiftover": null,
+    "maf2hal": null
+  },
+  "portable_audit_evidence": "experiments/palaeognathae/evidence/manifest.json",
+  "portable_audit_scope": "four independent random 6000-interval edge samples; not coherent traversal input"
+}

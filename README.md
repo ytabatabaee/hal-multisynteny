@@ -42,9 +42,18 @@ Audit preserved Palaeognathae evidence without running HAL:
 python -m scripts.audit_palaeognathae_overlap
 ```
 
-The [audit report](experiments/psl-overlap/palaeognathae.md) covers all four
-available direct-edge PSL captures (24,000 sampled intervals), including
-source multiplicity, same-target overlaps, exact duplicates, and coverage.
+The committed [audit evidence manifest](experiments/palaeognathae/evidence/manifest.json)
+contains deterministic gzip captures and sampled-block inputs for all four
+available direct-edge PSL captures. The [audit report](experiments/psl-overlap/palaeognathae.md)
+covers 24,000 sampled intervals, including source multiplicity, same-target
+overlaps, exact duplicates, and coverage. The HAL itself is intentionally
+external; the audit does not require it.
+
+The audit verifies both compressed and decompressed checksums. It reports four
+of eight planned edges and sampled intervals only; zero source multiplicity in
+these samples does not prove global one-to-one liftover. The committed
+`palaeognathae.problematic.tsv` lists every affected block and distinguishes
+source multiplicity, same-target overlap, and both.
 
 ## Algorithm
 

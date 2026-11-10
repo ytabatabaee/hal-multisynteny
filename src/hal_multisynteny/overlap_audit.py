@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import gzip
+import hashlib
 import json
+import tempfile
 from collections import Counter
 from itertools import pairwise
 from pathlib import Path
@@ -137,36 +140,60 @@ def audit_preserved_psl(audit_dir, output_prefix):
     silently inferred absent from an ancestral genome label.
     """
     audit_dir, prefix = Path(audit_dir), Path(output_prefix)
-    raw_paths = sorted(audit_dir.glob("results*/source-aware/*.raw.psl"))
+    evidence_dir = audit_dir.parent / "evidence"
+    raw_paths = sorted(evidence_dir.glob("*.raw.psl.gz"))
+    portable = bool(raw_paths and (evidence_dir / "manifest.json").exists())
+    if not raw_paths:
+        raw_paths = sorted(audit_dir.glob("results*/source-aware/*.raw.psl"))
     if not raw_paths:
         raise ValueError("no preserved source-aware PSL captures found")
     all_rows, edge_rows, evidence = [], [], []
     seen = set()
     for raw in raw_paths:
-        provenance = json.loads(
-            raw.with_name(raw.name.replace(".raw.psl", ".provenance.json")).read_text()
-        )
-        checksum = sha256_file(raw)
-        if checksum != provenance["raw_psl_sha256"]:
-            raise ValueError(f"raw PSL checksum changed: {raw}")
-        child, parent = provenance["child_genome"], provenance["parent_genome"]
-        sampled = raw.parent.parent / "sampled"
-        paths = sorted(sampled.glob(f"*__{child}__to__{parent}.blocks.tsv"))
+        if portable:
+            manifest = json.loads((evidence_dir / "manifest.json").read_text())
+            entry = next((row for row in manifest["captures"] if row["compressed_file"] == raw.name), None)
+            if entry is None:
+                raise ValueError(f"evidence manifest has no entry for {raw.name}")
+            compressed_checksum = sha256_file(raw)
+            with gzip.open(raw, "rb") as handle:
+                raw_bytes = handle.read()
+            checksum = hashlib.sha256(raw_bytes).hexdigest()
+            if compressed_checksum != entry["compressed_sha256"] or checksum != entry["raw_sha256"]:
+                raise ValueError(f"compressed or raw PSL checksum changed: {raw}")
+            child, parent = entry["child_genome"], entry["parent_genome"]
+            sampled = evidence_dir
+            paths = [sampled / entry["sampled_file"]]
+            provenance = {"hal_sha256": entry.get("hal_sha256", manifest["hal_sha256"])}
+            with tempfile.NamedTemporaryFile(suffix=".psl") as handle:
+                handle.write(raw_bytes)
+                handle.flush()
+                grouped = read_source_psl(handle.name)
+        else:
+            provenance = json.loads(raw.with_name(raw.name.replace(".raw.psl", ".provenance.json")).read_text())
+            checksum = sha256_file(raw)
+            if checksum != provenance["raw_psl_sha256"]:
+                raise ValueError(f"raw PSL checksum changed: {raw}")
+            child, parent = provenance["child_genome"], provenance["parent_genome"]
+            sampled = raw.parent.parent / "sampled"
+            paths = sorted(sampled.glob(f"*__{child}__to__{parent}.blocks.tsv"))
+            grouped = read_source_psl(raw)
         if len(paths) != 1:
             raise ValueError(f"expected one sampled input for {child}->{parent}")
         blocks_path = paths[0]
-        sample_manifest = json.loads((sampled / "sampling-manifest.json").read_text())
-        if sample_manifest["identity"]["hal_sha256"] != provenance["hal_sha256"]:
-            raise ValueError("sampling and PSL HAL identities disagree")
-        if not any(
-            Path(value).name == blocks_path.name for value in sample_manifest["outputs"].values()
-        ):
-            raise ValueError("sampled file absent from original manifest")
+        if portable:
+            if sha256_file(blocks_path) != entry["sampled_sha256"]:
+                raise ValueError(f"sampled block checksum changed: {blocks_path}")
+        else:
+            sample_manifest = json.loads((sampled / "sampling-manifest.json").read_text())
+            if sample_manifest["identity"]["hal_sha256"] != provenance["hal_sha256"]:
+                raise ValueError("sampling and PSL HAL identities disagree")
+            if not any(Path(value).name == blocks_path.name for value in sample_manifest["outputs"].values()):
+                raise ValueError("sampled file absent from original manifest")
         capture = (child, parent, checksum, sha256_file(blocks_path))
         if capture in seen:
             continue
         seen.add(capture)
-        grouped = read_source_psl(raw)
         blocks = _read_blocks(blocks_path)
         known = {b.block_id for b in blocks}
         if len(known) != len(blocks) or set(grouped) - known:
@@ -186,9 +213,9 @@ def audit_preserved_psl(audit_dir, output_prefix):
             {
                 "child_genome": child,
                 "parent_genome": parent,
-                "raw_psl": str(raw.relative_to(audit_dir)),
+                "raw_psl": str(raw.relative_to(evidence_dir if portable else audit_dir)),
                 "raw_psl_sha256": checksum,
-                "sampled_blocks": str(blocks_path.relative_to(audit_dir)),
+                "sampled_blocks": blocks_path.name,
                 "sampled_blocks_sha256": sha256_file(blocks_path),
                 "hal_sha256": provenance["hal_sha256"],
             }
@@ -203,11 +230,23 @@ def audit_preserved_psl(audit_dir, output_prefix):
         for child, parent in sorted(planned_edges - covered_edges)
     ]
     multiple = [row for row in all_rows if row["new_source_multiplicity"]]
+    problematic = []
+    for original in all_rows:
+        if not (original["new_source_multiplicity"] or original["source_disjoint_target_overlap_pair_count"]):
+            continue
+        row = dict(original)
+        row["problem_type"] = (
+            "both" if row["new_source_multiplicity"] and row["source_disjoint_target_overlap_pair_count"]
+            else "source_multiplicity" if row["new_source_multiplicity"]
+            else "same_target_overlap"
+        )
+        problematic.append(row)
     prefix.parent.mkdir(parents=True, exist_ok=True)
     for suffix, rows, fields in (
         ("blocks", all_rows, list(all_rows[0])),
         ("edges", edge_rows, list(edge_rows[0])),
         ("multiplicity", multiple, list(all_rows[0])),
+        ("problematic", problematic, list(problematic[0]) if problematic else list(all_rows[0])),
     ):
         _write_tsv(Path(f"{prefix}.{suffix}.tsv"), fields, rows)
     payload = {
@@ -227,6 +266,8 @@ def audit_preserved_psl(audit_dir, output_prefix):
         "evidence": evidence,
         "planned_edges_without_psl": missing_edges,
         "blocks_with_source_multiplicity": multiple,
+        "problematic_block_count": len(problematic),
+        "problematic_component_overlap_pair_count": sum(row["source_disjoint_target_overlap_pair_count"] for row in problematic),
     }
     Path(f"{prefix}.json").write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n")
     lines = [
@@ -237,17 +278,18 @@ def audit_preserved_psl(audit_dir, output_prefix):
         "",
         "Source atoms are disjoint after atomization; target projections may overlap or be one-to-many. Atomwise unique does not establish biological uniqueness or synteny.",
         "",
-        "| Child → parent | Inputs | Source multiplicity >1 | Newly ambiguous | Same-target overlap pairs | Max multiplicity |",
+        "| Child → parent | Inputs | Problematic blocks | Source multiplicity >1 | Same-target overlap pairs | Max multiplicity |",
         "|---|---:|---:|---:|---:|---:|",
     ]
     for edge in edge_rows:
         lines.append(
-            f"| {edge['child_genome']} → {edge['parent_genome']} | {edge['input_block_count']} | {edge['blocks_with_source_multiplicity']} | {edge['blocks_with_new_ambiguity']} | {edge['source_disjoint_target_overlap_pair_count']} | {edge['maximum_source_projection_multiplicity']} |"
+            f"| {edge['child_genome']} → {edge['parent_genome']} | {edge['input_block_count']} | {edge['blocks_with_new_ambiguity']} | {edge['blocks_with_source_multiplicity']} | {edge['source_disjoint_target_overlap_pair_count']} | {edge['maximum_source_projection_multiplicity']} |"
         )
     total_problematic = sum(edge["blocks_with_new_ambiguity"] for edge in edge_rows)
+    total_overlap_pairs = sum(edge["source_disjoint_target_overlap_pair_count"] for edge in edge_rows)
     lines += [
         "",
-        f"New ambiguity affects {total_problematic:,} inputs. Per-edge concentration (share of all problematic inputs; within-edge rate):",
+        f"Current-edge conflict affects {total_problematic:,} blocks and contains {total_overlap_pairs:,} overlapping component pairs. Per-edge concentration (share of all problematic blocks; within-edge rate):",
     ]
     for edge in sorted(
         edge_rows, key=lambda e: (-e["blocks_with_new_ambiguity"], e["child_genome"])
@@ -261,7 +303,7 @@ def audit_preserved_psl(audit_dir, output_prefix):
         lines += [f"- {edge['child_genome']} → {edge['parent_genome']}" for edge in missing_edges]
     lines += [
         "",
-        f"Every input with source multiplicity >1 ({len(multiple):,} inputs) is listed in `{prefix.name}.multiplicity.tsv` and the JSON summary.",
+        f"Every problematic input ({len(problematic):,} blocks; {sum(row['source_disjoint_target_overlap_pair_count'] for row in problematic):,} overlapping component pairs) is listed in `{prefix.name}.problematic.tsv`; source-multiplicity inputs are listed separately in `{prefix.name}.multiplicity.tsv`.",
         "Inherited ambiguity is unavailable for these randomly sampled intervals because no upward state was captured. Newly observed source multiplicity and same-target overlap are reported separately; ancestor names do not imply inherited ambiguity.",
         "Raw PSL checksums are verified against capture provenance. Sampling-file checksums are recorded now; the historical sampling manifest did not checksum its outputs.",
         "Statistics describe sampled mappings, not full-genome rates, biological copy identities, or liftover transitivity.",

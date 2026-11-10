@@ -1,0 +1,1 @@
+hal-multisynteny run-tree --backend hal-psl-piecewise --leaf-init supplied --hal /path/to/PalaeognathaeAnc0.hal --tree /path/to/tree.nwk --node-map /path/to/node-map.tsv --leaf-blocks /path/to/leaf-blocks --output-dir experiments/downward-pilot/run --min-block-length 1 --downward-refinement

@@ -122,3 +122,14 @@ def test_discovery_determinism_complete_multiplicity_list_and_integrity(tmp_path
     raw.write_text(raw.read_text() + "\n")
     with pytest.raises(ValueError, match="checksum changed"):
         audit_preserved_psl(root, prefix)
+
+
+def test_committed_portable_evidence_reproduces_compact_reports(tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    source = repo / "experiments" / "palaeognathae"
+    target = tmp_path / "reports" / "palaeognathae"
+    audit_preserved_psl(source / "audit", target)
+    for suffix in ("json", "edges.tsv", "blocks.tsv", "problematic.tsv", "multiplicity.tsv", "md"):
+        assert Path(f"{target}.{suffix}").read_bytes() == Path(
+            f"{repo}/experiments/psl-overlap/palaeognathae.{suffix}"
+        ).read_bytes()
