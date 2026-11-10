@@ -615,6 +615,21 @@ inputs. The complete HAL tree and direct-parent inventory recovered with
 `halStats` are committed as compact metadata beside the report. The HAL itself
 is intentionally not committed.
 
+### Checkpoint visualization
+
+Inspect a stored run locally with:
+
+```bash
+hal-multisynteny visualize-run --run-dir pilot-run --node PalaeognathaeAnc0 \
+  --output pilot-run/visualization.html
+```
+
+The result is a self-contained HTML page with upward/downward tracks, atomic
+boundaries, classification and mapping-status filters, deterministic region
+selection, and a conservative `--max-blocks` limit. See
+[docs/VISUALIZATION.md](docs/VISUALIZATION.md). Missing or one-sided evidence
+is evidence state, not a confirmed biological deletion.
+
 Before any controlled bird/fish reconciliation, use the direct-edge audit
 workflow to quantify whether the current BED6 `halLiftover` backend is adequate
 on the target HAL. The workflow is JSON-configured and consists of:

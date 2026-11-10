@@ -267,6 +267,14 @@ def _refine_downward(args):
     return 0
 
 
+def _visualize_run(args: argparse.Namespace) -> int:
+    from .visualize import visualize_run
+    result = visualize_run(args.run_dir, args.node, args.output, args.chrom, args.start, args.end, args.max_blocks)
+    region = result["region"]
+    print(f"wrote visualization {args.output} for {region['chrom']}:{region['start']}-{region['end']}")
+    return 0
+
+
 def _audit_liftover(args: argparse.Namespace) -> int:
     summary = audit_liftover(
         hal_path=args.hal,
@@ -437,6 +445,16 @@ def build_parser() -> argparse.ArgumentParser:
     downward.add_argument("--output-dir", required=True)
     downward.add_argument("--resume", action="store_true")
     downward.set_defaults(func=_refine_downward)
+
+    visualize = subparsers.add_parser("visualize-run", help="render a stored upward/downward run as self-contained HTML")
+    visualize.add_argument("--run-dir", required=True)
+    visualize.add_argument("--node", required=True)
+    visualize.add_argument("--output", required=True)
+    visualize.add_argument("--chrom")
+    visualize.add_argument("--start", type=int)
+    visualize.add_argument("--end", type=int)
+    visualize.add_argument("--max-blocks", type=int, default=5000)
+    visualize.set_defaults(func=_visualize_run)
 
     audit = subparsers.add_parser("audit-liftover", help="audit raw halLiftover BED output")
     audit.add_argument("--hal", required=True)
