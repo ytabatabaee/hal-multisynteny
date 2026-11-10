@@ -1,0 +1,7 @@
+leaf	block_id	chrom	start	end	strand	copy_id	status	source
+GCF_036417845.1	GCF_036417845.1.b01	NC_089978.1	0	100000	+	1	unique	bounded_real_interval
+GCF_036417845.1	GCF_036417845.1.b02	NC_089978.1	200000	300000	+	1	unique	bounded_real_interval
+GCF_036417845.1	GCF_036417845.1.b03	NC_089978.1	400000	500000	+	1	unique	bounded_real_interval
+GCF_036370855.1	GCF_036370855.1.b01	NC_088098.1	0	100000	+	1	unique	bounded_real_interval
+GCF_036370855.1	GCF_036370855.1.b02	NC_088098.1	200000	300000	+	1	unique	bounded_real_interval
+GCF_036370855.1	GCF_036370855.1.b03	NC_088098.1	400000	500000	+	1	unique	bounded_real_interval

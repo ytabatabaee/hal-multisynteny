@@ -15,3 +15,5 @@ experiments/palaeognathae/audit/results-all-direct/
 # Local tooling and IDE metadata
 .tools/
 .idea/
+.hal-env/
+experiments/downward-pilot/run/

@@ -1,0 +1,10 @@
+genome	parent	kind
+PalaeognathaeAnc0		ancestor
+PalaeognathaeAnc1	PalaeognathaeAnc0	ancestor
+PalaeognathaeAnc2	PalaeognathaeAnc1	ancestor
+PalaeognathaeAnc3	PalaeognathaeAnc2	ancestor
+GCA_047922985.1	PalaeognathaeAnc1	leaf
+GCF_028389875.1	PalaeognathaeAnc2	leaf
+GCF_036370855.1	PalaeognathaeAnc3	leaf
+GCF_036417845.1	PalaeognathaeAnc3	leaf
+GCF_040807025.1	PalaeognathaeAnc0	leaf

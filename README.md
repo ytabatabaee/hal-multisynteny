@@ -605,6 +605,16 @@ future schema extension, not current behavior.
 
 ## Real-data liftover audit
 
+### Bounded Palaeognathae traversal pilot
+
+The completed two-leaf upward/downward pilot is documented in
+[experiments/downward-pilot/REPORT.md](experiments/downward-pilot/REPORT.md).
+It uses deterministic real intervals and `hal-psl-piecewise`; the independent
+random PSL audit captures remain diagnostic evidence and are not traversal
+inputs. The complete HAL tree and direct-parent inventory recovered with
+`halStats` are committed as compact metadata beside the report. The HAL itself
+is intentionally not committed.
+
 Before any controlled bird/fish reconciliation, use the direct-edge audit
 workflow to quantify whether the current BED6 `halLiftover` backend is adequate
 on the target HAL. The workflow is JSON-configured and consists of:

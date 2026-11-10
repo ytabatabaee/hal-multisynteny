@@ -1,0 +1,10 @@
+{
+  "hal": "data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+  "sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+  "bytes": 7470552826,
+  "tree_source": "halStats --tree",
+  "genomes_source": "halStats --genomes",
+  "root": "PalaeognathaeAnc0",
+  "leaves": ["GCA_047922985.1", "GCF_028389875.1", "GCF_036370855.1", "GCF_036417845.1", "GCF_040807025.1"],
+  "ancestors": ["PalaeognathaeAnc0", "PalaeognathaeAnc1", "PalaeognathaeAnc2", "PalaeognathaeAnc3"]
+}

@@ -1,5 +1,1 @@
-{
-  "status": "blocked",
-  "nodes": [],
-  "reason": "No coherent Palaeognathae leaf checkpoints, guide-tree/node-map bundle, stored traversal edge runs, or available HAL executables were present."
-}
+{"status":"completed_engineering_pilot","runtime_seconds":{"wall":94.14,"user":34.4,"system":9.16},"peak_memory_bytes":{"maximum_resident_set":155566080,"peak_footprint":142307328},"nodes":{"PalaeognathaeAnc3":{"input_child_blocks":[3,3],"upward_atomic_blocks":2552,"retained":2552,"filtered":0,"classifications":{"shared_consistent":0,"left_only":1562,"right_only":990,"ambiguous":0,"complex":0,"duplication_conflict":0,"orientation_conflict":0,"order_conflict":0,"unaligned":0},"downward_before":2552,"downward_after":2552,"split_blocks":0,"split_fraction":0.0},"GCF_036417845.1":{"input_child_blocks":[3],"downward_before":3,"downward_after":2467,"split_blocks":2464,"split_fraction":0.998783137819255,"ambiguous_blocks":2084,"ambiguous_breakpoints":1798,"covered_bases_conserved":true},"GCF_036370855.1":{"input_child_blocks":[3],"downward_before":3,"downward_after":1278,"split_blocks":1275,"split_fraction":0.9976525821596244,"ambiguous_blocks":710,"ambiguous_breakpoints":573,"covered_bases_conserved":true}}}
