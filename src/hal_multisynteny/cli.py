@@ -450,10 +450,11 @@ def build_parser() -> argparse.ArgumentParser:
     visualize.add_argument("--run-dir", required=True)
     visualize.add_argument("--node", required=True)
     visualize.add_argument("--output", required=True)
-    visualize.add_argument("--chrom")
-    visualize.add_argument("--start", type=int)
-    visualize.add_argument("--end", type=int)
-    visualize.add_argument("--max-blocks", type=int, default=5000)
+    visualize.add_argument("--chrom", help="embedded parent chromosome; output is bounded to the selected preview extent")
+    visualize.add_argument("--start", type=int, help="zero-based half-open preview start")
+    visualize.add_argument("--end", type=int, help="zero-based half-open preview end")
+    visualize.add_argument("--max-blocks", type=int, default=5000,
+                           help="maximum total rendered objects across all lanes (default: 5000)")
     visualize.set_defaults(func=_visualize_run)
 
     audit = subparsers.add_parser("audit-liftover", help="audit raw halLiftover BED output")

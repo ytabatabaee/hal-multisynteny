@@ -24,6 +24,8 @@ def _run(tmp_path):
 def test_loader_region_half_open_and_limit(tmp_path):
     model = load_run(_run(tmp_path), "root")
     assert select_region(model, "chr1", 10, 20)["blocks"] == []
+    with pytest.raises(ValueError, match="exceeds loaded extent"):
+        select_region(model, "chr1", 0, 31)
     with pytest.raises(ValueError, match="max-blocks"):
         select_region(model, "chr1", 0, 30, max_blocks=1)
 
@@ -52,3 +54,21 @@ def test_all_object_types_count_toward_limit_and_hostile_text_is_data(tmp_path):
     render_html(model, region, out)
     page = out.read_text()
     assert "\\u003c/script\\u003e" in page
+
+
+def test_single_chromosome_and_automatic_preview_are_explicit(tmp_path):
+    model = load_run(_run(tmp_path), "root")
+    region = select_region(model)
+    assert region["automatic"] is True
+    assert region["chrom"] == "chr1"
+    assert region["start"] >= 0 and region["end"] <= 30
+
+
+def test_lineage_split_count_uses_records_not_block_id(tmp_path):
+    model = load_run(_run(tmp_path), "root")
+    model["lineage"] = [
+        {"original_block_id": "b1", "block_id": "desc-a"},
+        {"original_block_id": "b1", "block_id": "desc-b"},
+    ]
+    from hal_multisynteny.visualize import _summary
+    assert _summary(model)["split_blocks"] == 1

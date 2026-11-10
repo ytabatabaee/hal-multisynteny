@@ -19,10 +19,15 @@ occurrences/copies, and gaps are left blank. Classifications use a
 colorblind-friendly palette plus text labels. Missing or one-sided evidence is
 not a confirmed deletion.
 
-The default `--max-blocks 5000` is a safety bound. Requested windows are
-filtered deterministically and never silently subsampled. Without a region,
-the viewer selects the largest deterministic chromosome and a one-million-base
-preview, reporting the exact coordinates in the page. A missing downward
-checkpoint leaves the upward view available and states that downward refinement
-is unavailable. The details panel displays recorded fields only; it does not
-infer orthology, absence, or copy identity.
+The default `--max-blocks 5000` is a safety bound over every rendered object
+(atoms, blocks, mappings, occurrences, downward blocks, and boundaries).
+Requested windows are filtered deterministically and never silently subsampled.
+The output embeds exactly one bounded interval (or a set of explicitly
+embedded chromosomes); chromosome and coordinate edits cannot leave that
+extent. Without a region, the viewer chooses a deterministic informative
+one-million-base preview, preferring propagated boundaries/conflicts,
+classification diversity, then density, and reports the exact coordinates and
+reason in the page. A missing downward checkpoint disables its view. The
+details panel leads with a joined summary and keeps the raw authoritative row
+in a collapsible section; it does not infer orthology, absence, or copy
+identity.
