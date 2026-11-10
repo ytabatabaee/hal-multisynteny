@@ -1,0 +1,3 @@
+block_id	node	chrom	start	end	classification	mapping_status
+b.shared	root	chr1	0	100	shared_consistent	unique
+b.left	root	chr1	120	180	left_only	unique

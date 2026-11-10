@@ -1,0 +1,3 @@
+atomic_interval_id	parent_node	parent_chrom	parent_start	parent_end	classification	final_parent_block_id
+a.shared	root	chr1	0	100	shared_consistent	b.shared
+a.left	root	chr1	120	180	left_only	b.left
