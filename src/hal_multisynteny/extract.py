@@ -22,7 +22,7 @@ class ExtractionError(RuntimeError):
     """Raised when edge extraction cannot produce strict parent-mapped runs."""
 
 
-HAL_BACKENDS = frozenset({"hal", "hal-psl-conservative", "hal-psl-piecewise", "hal-synteny-overlay"})
+HAL_BACKENDS = frozenset({"hal", "hal-psl-conservative", "hal-psl-piecewise", "hal-synteny-overlay", "hal-native-segments"})
 
 
 def is_hal_backend(backend: str) -> bool:
@@ -398,6 +398,22 @@ class FakeEdgeExtractor:
                 except ValueError as exc:
                     raise ExtractionError(f"invalid fake mapping at line {line_number}: {exc}") from exc
         return tuple(records)
+
+
+class NativeSegmentExtractor(FakeEdgeExtractor):
+    """Deterministic native-segment interface backed by a serialized segment table.
+
+    The table uses the existing ``EdgeMappingRun`` schema, preserving exact
+    child/parent coordinates, strand, status, copy and provenance. A future
+    HAL C++ adapter can implement the same ``extract`` contract without
+    changing reconciliation. This avoids silently substituting halLiftover.
+    """
+
+    def extract(self, child_node_id, parent_node_id, child_hal_genome, parent_hal_genome, child_blocks):
+        result = super().extract(child_node_id, parent_node_id, child_hal_genome, parent_hal_genome, child_blocks)
+        return EdgeExtractionResult(result.runs, result.unmapped, "hal-native-segments", {"native-segments": "fixture-table"}, result.commands,
+                                    ("native HAL C++ extraction is not bundled; using explicit segment table",), result.artifacts,
+                                    result.block_states, result.edge_statistics)
 
 
 class HalEdgeExtractor:

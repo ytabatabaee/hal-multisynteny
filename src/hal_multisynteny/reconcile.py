@@ -41,6 +41,7 @@ class ReconcileConfig:
     guide_tree_id: str | None = None
     copy_id_scope: str = "local"
     preserve_atomic_boundaries: bool = False
+    segment_chaining: bool = False
 
     def __post_init__(self) -> None:
         if self.min_block_length < 1:
@@ -572,6 +573,10 @@ def merge_decision(
     if previous.classification != current.classification:
         reasons.append("different_classification")
     same_membership = _membership(previous) == _membership(current)
+    if config.segment_chaining:
+        # Segment chaining relaxes only source block identity; collinearity,
+        # orientation, copy, status, and child support checks remain active.
+        same_membership = True
     if not same_membership and min(previous.end - previous.start, current.end - current.start) > config.boundary_tolerance:
         reasons.append("boundary_atom_exceeds_tolerance")
     previous_records = previous.left + previous.right

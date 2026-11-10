@@ -85,3 +85,12 @@ The tiny-HAL expected results are checked in at
 the fixture MAF blocks and are used by HAL-marked tests and the local smoke
 script to verify exact target intervals, strands, audit categories, propagated
 orientations, conflict classifications, and unmapped-evidence lifecycle.
+## Native segment interface (experimental)
+
+The experimental `hal-native-segments` backend consumes a deterministic TSV
+using the existing `EdgeMappingRun` coordinate/status/provenance schema. It is
+intended as the serialization boundary for a future batched HAL C++
+top/bottom-segment adapter. The current repository does not bundle HAL C++
+development headers or a Python binding, so it refuses to claim native
+extraction and requires `--fake-mappings`. Missing intervals remain explicit
+unaligned evidence; multiple alternatives remain separate records.

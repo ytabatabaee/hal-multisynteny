@@ -391,3 +391,19 @@ It inverse-projects boundaries only through stored length-preserving runs, keeps
 all ambiguous alternatives and provenance, and atomically writes an independent
 `downward/` package. Upward common refinement is always active in the tree runner;
 turning the optional downward pass on or off does not change upward inputs.
+
+## Native-segment chaining (experimental)
+
+`--reconciliation-policy segment-chaining` selects the existing compatible
+adjacent-atom merge machinery instead of preserving every atomic boundary.
+`AtomicInterval.final_parent_block_id` is the explicit atom-to-final-block
+correspondence; merge decisions and rejected barriers retain their provenance.
+The legacy `common-refinement` policy remains the default.
+
+The `hal-native-segments` backend currently exposes a deterministic
+`EdgeMappingRun` segment-table interface (`--fake-mappings`) so the Python
+reconciler can be tested without pretending that halLiftover is native
+extraction. A bundled HAL C++ top/bottom-segment adapter is not yet available;
+no whole-genome substitute is invoked. Native extraction must preserve direct
+parent coordinates, orientation, alternatives, and unmapped evidence before it
+can be enabled for the large Palaeognathae HAL.

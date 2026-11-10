@@ -27,6 +27,14 @@ Run HAL-marked tests:
 pytest -m hal
 ```
 
+Segment-chaining regression fixtures use the same `EdgeMappingRun` schema as
+the production checkpoint tables and can be run without HAL binaries. They
+verify adjacent collinear segments merge under `segment-chaining`, while
+orientation, chromosome, ambiguity, and duplication barriers remain separate.
+The `hal-native-segments` name currently denotes the explicit deterministic
+segment-table adapter; it is not evidence that a native HAL C++ extractor is
+installed.
+
 Run the complete local integration smoke:
 
 ```bash

@@ -253,6 +253,7 @@ def _run_tree(args: argparse.Namespace) -> int:
             hal_synteny_max_anchor_distance=args.hal_synteny_max_anchor_distance,
             close_unmerged_threshold=args.close_unmerged_threshold,
             downward_refinement=args.downward_refinement,
+            reconciliation_policy=args.reconciliation_policy,
         ),
     )
     print("dry-run plan written" if args.dry_run else "tree run complete")
@@ -429,14 +430,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--resume", action="store_true")
     run.add_argument("--force-node")
     run.add_argument("--dry-run", action="store_true")
-    run.add_argument("--backend", choices=("fake", "hal", "hal-psl-conservative", "hal-psl-piecewise", "hal-synteny-overlay"), default="fake")
+    run.add_argument("--backend", choices=("fake", "hal", "hal-psl-conservative", "hal-psl-piecewise", "hal-synteny-overlay", "hal-native-segments"), default="fake")
     run.add_argument("--fake-mappings")
-    run.add_argument("--leaf-init", choices=("supplied", "halsynteny"), default="supplied")
+    run.add_argument("--leaf-init", choices=("supplied", "native", "halsynteny"), default="supplied")
     run.add_argument("--hal-synteny-min-block-size", type=int, default=50)
     run.add_argument("--hal-synteny-max-anchor-distance", type=int, default=1000)
     run.add_argument("--close-unmerged-threshold", type=int, default=1000)
     run.add_argument("--downward-refinement", action="store_true",
                      help="split descendants using stored runs after upward common refinement")
+    run.add_argument("--reconciliation-policy", choices=("common-refinement", "segment-chaining"),
+                     default="common-refinement", help="atomic preservation policy for upward reconciliation")
     run.set_defaults(func=_run_tree)
 
     downward = subparsers.add_parser("refine-downward", help="refine stored common-refinement checkpoints without HAL")

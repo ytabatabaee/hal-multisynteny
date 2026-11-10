@@ -57,3 +57,19 @@ embedded interval, and boundary points use half-open left-inclusive/right-
 exclusive selection. Six focused visualization tests pass in addition to the
 full-suite baseline; display joins remain read-only and do not rewrite any
 checkpoint evidence.
+
+## 2026-11-10 — native-segment chaining milestone
+
+Added the selectable `segment-chaining` reconciliation policy. It reuses the
+existing atomic sweep/merge decisions while relaxing only source block-ID
+identity; collinearity, orientation, chromosome, copy, status, and child
+support barriers remain enforced. `AtomicInterval.final_parent_block_id`
+preserves atom-to-final-block correspondence, and the legacy
+`common-refinement` policy remains the default.
+
+The `hal-native-segments` backend and `--leaf-init native` interface are now
+available for deterministic `EdgeMappingRun` segment tables. A batched HAL
+native C++ extractor is not bundled because HAL development headers/bindings
+are unavailable here; the backend requires `--fake-mappings` and does not
+silently invoke halLiftover. This is an explicit blocker, not native biological
+validation. Existing backend outputs are unchanged.

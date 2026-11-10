@@ -17,6 +17,7 @@ from .extract import (
     FakeEdgeExtractor,
     HalEdgeExtractor,
     HalSyntenyLeafInitializer,
+    NativeSegmentExtractor,
     is_hal_backend,
 )
 from .hal import inspect_hal
@@ -88,6 +89,11 @@ class RunTreeConfig:
     fake_mappings: str | None = None
     hal: str | None = None
     downward_refinement: bool = False
+    reconciliation_policy: str = "common-refinement"
+
+    def __post_init__(self):
+        if self.reconciliation_policy not in {"common-refinement", "segment-chaining"}:
+            raise ValueError("reconciliation_policy must be common-refinement or segment-chaining")
 
 
 def init_leaf_packages(
@@ -186,7 +192,8 @@ def run_tree(
                 boundary_tolerance=config.boundary_tolerance,
                 max_merge_gap=config.max_merge_gap,
                 copy_id_scope=config.copy_id_scope,
-                preserve_atomic_boundaries=True,
+                preserve_atomic_boundaries=config.reconciliation_policy != "segment-chaining",
+                segment_chaining=config.reconciliation_policy == "segment-chaining",
                 guide_tree_id=plan.tree_sha256,
             ),
         )
@@ -298,8 +305,8 @@ def _init_leaf_packages_from_plan(
     identity: dict[str, object],
     config: RunTreeConfig,
 ) -> None:
-    if config.leaf_init not in {"supplied", "halsynteny"}:
-        raise CheckpointError("leaf_init must be supplied or halsynteny")
+    if config.leaf_init not in {"supplied", "halsynteny", "native"}:
+        raise CheckpointError("leaf_init must be supplied, native, or halsynteny")
     if config.leaf_init == "halsynteny":
         if not is_hal_backend(config.backend) or not config.hal:
             raise CheckpointError("--leaf-init halsynteny requires --hal and a HAL-backed backend")
@@ -312,7 +319,7 @@ def _init_leaf_packages_from_plan(
         _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializer, resume)
         return
     if leaf_blocks is None:
-        raise CheckpointError("--leaf-blocks is required with --leaf-init supplied")
+        raise CheckpointError("--leaf-blocks is required with --leaf-init supplied/native; native HAL leaf extraction is unavailable")
     source = Path(leaf_blocks)
     rows = read_leaf_seed_blocks(source / "leaf_blocks.tsv")
     by_leaf: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -840,6 +847,7 @@ def _parameters(config: RunTreeConfig, plan: TraversalPlan, identity: dict[str, 
         "hal_synteny_min_block_size": config.hal_synteny_min_block_size,
         "hal_synteny_max_anchor_distance": config.hal_synteny_max_anchor_distance,
         "close_unmerged_threshold": config.close_unmerged_threshold,
+        "reconciliation_policy": config.reconciliation_policy,
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
         "version": __version__,
@@ -941,6 +949,10 @@ def _build_extractor(config: RunTreeConfig) -> EdgeExtractor:
         if not config.fake_mappings:
             raise CheckpointError("--fake-mappings is required for the fake backend")
         return FakeEdgeExtractor(config.fake_mappings)
+    if config.backend == "hal-native-segments":
+        if not config.fake_mappings:
+            raise CheckpointError("--fake-mappings is required for the current native-segment fixture interface; native HAL C++ extraction is unavailable")
+        return NativeSegmentExtractor(config.fake_mappings)
     if is_hal_backend(config.backend):
         if not config.hal:
             raise CheckpointError("--hal is required for the HAL backend")
