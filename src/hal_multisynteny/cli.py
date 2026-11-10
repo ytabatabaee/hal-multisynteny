@@ -252,9 +252,18 @@ def _run_tree(args: argparse.Namespace) -> int:
             hal_synteny_min_block_size=args.hal_synteny_min_block_size,
             hal_synteny_max_anchor_distance=args.hal_synteny_max_anchor_distance,
             close_unmerged_threshold=args.close_unmerged_threshold,
+            downward_refinement=args.downward_refinement,
         ),
     )
     print("dry-run plan written" if args.dry_run else "tree run complete")
+    return 0
+
+
+def _refine_downward(args):
+    from .downward import refine_tree
+    refine_tree(tree_path=args.tree, node_map_path=args.node_map,
+                output_dir=args.output_dir, resume=args.resume)
+    print("downward refinement complete")
     return 0
 
 
@@ -418,7 +427,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--hal-synteny-min-block-size", type=int, default=50)
     run.add_argument("--hal-synteny-max-anchor-distance", type=int, default=1000)
     run.add_argument("--close-unmerged-threshold", type=int, default=1000)
+    run.add_argument("--downward-refinement", action="store_true",
+                     help="split descendants using stored runs after upward common refinement")
     run.set_defaults(func=_run_tree)
+
+    downward = subparsers.add_parser("refine-downward", help="refine stored common-refinement checkpoints without HAL")
+    downward.add_argument("--tree", required=True)
+    downward.add_argument("--node-map", required=True)
+    downward.add_argument("--output-dir", required=True)
+    downward.add_argument("--resume", action="store_true")
+    downward.set_defaults(func=_refine_downward)
 
     audit = subparsers.add_parser("audit-liftover", help="audit raw halLiftover BED output")
     audit.add_argument("--hal", required=True)

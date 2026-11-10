@@ -2,6 +2,15 @@
 
 ## Next validation milestone - Unreleased
 
+- Audit preserved Palaeognathae direct-edge PSL multiplicity, source atom coverage,
+  same-target overlaps, chromosome/orientation/order boundaries and exact duplicate
+  rows/geometries without HAL execution. Record unavailable inherited sample state.
+- Enforce upward common refinement in the tree runner and add optional versioned
+  split-only downward refinement using stored runs, all unresolved hypotheses,
+  breakpoint origins, copy/component/barrier provenance, conservation checks,
+  deterministic output, statistics and checksum-validated resume. Upward schema
+  0.8.0 rejects legacy merging checkpoints; downward schema/policy are version 1.
+
 - Add experimental all-edge `hal-synteny-overlay`: exact clipping of existing
   child blocks against audited normalized halSynteny components, independent
   chain/copy identities, chain-boundary and gap barriers, inherited status

@@ -202,7 +202,7 @@ class HalPslPiecewiseExtractor(HalPslConservativeExtractor):
 
     PSL records are output records, not biological copies.  This backend
     partitions each input block by normalized component boundaries and calls a
-    block unique only when every covered source atom has one distinct target
+    block atomwise unique only when every covered source atom has one distinct target
     projection.  Overlapping projections remain ambiguous; source-disjoint
     pieces remain spatial evidence with one logical child occurrence.
     """

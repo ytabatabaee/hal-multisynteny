@@ -40,6 +40,7 @@ class ReconcileConfig:
     max_merge_gap: int = 0
     guide_tree_id: str | None = None
     copy_id_scope: str = "local"
+    preserve_atomic_boundaries: bool = False
 
     def __post_init__(self) -> None:
         if self.min_block_length < 1:
@@ -486,6 +487,8 @@ def merge_decision(
     intervening_filtered: bool = False,
 ) -> MergeDecision:
     reasons: list[str] = []
+    if config.preserve_atomic_boundaries:
+        reasons.append("common_refinement_boundary")
     gap = current.start - previous.end
     conflict_reasons = {
         "orientation_conflict": "unresolved_orientation_conflict",

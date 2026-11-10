@@ -42,8 +42,9 @@ direct HAL parent. PSL chains become deterministic query-side NodeBlocks plus
 exact fragment-level edge runs, including duplicate alternatives and raw PSL
 provenance. Internal edges continue to use constrained `halLiftover` mapping
 of reconciled NodeBlocks. For `n` leaves there are `2n-2` child-to-parent edges
-and `2n-1` nodes. The greedy merge rule is deliberately unchanged for this
-pilot. Tree-wide postorder outputs are `node_statistics.tsv`,
+and `2n-1` nodes. The tree runner now retains every atomic boundary as a
+common refinement (checkpoint schema 0.8.0); it does not invoke greedy merging.
+The standalone reconciliation API retains the legacy merge policy. Tree-wide postorder outputs are `node_statistics.tsv`,
 `node_classifications.tsv`, and `merge_rejection_summary.tsv`; internal
 checkpoints also contain `merge_decisions.tsv` and
 `close_unmerged_pairs.tsv`. halSynteny transitivity remains unproven.
@@ -102,7 +103,7 @@ they never become false unaligned outcomes.
 
 Zero records produce nonspatial `UnmappedEdgeEvidence(status=unaligned)`. One
 record produces exact component `EdgeMappingRun`s with one stable logical input
-occurrence, raw outcome unique, and relative orientation in `strand`. The
+occurrence, raw outcome atomwise unique (`unique`), and relative orientation in `strand`. The
 effective status also incorporates unresolved inherited evidence below. Query sign,
 nullable explicit target sign (empty TSV field when absent), raw strand field,
 PSL line number, and component order remain separate provenance fields. No
@@ -187,7 +188,7 @@ are emitted only when the extraction supplies explicit block states; they are no
 invented for legacy BED6 or stored halSynteny runs. Other backends retain their
 existing logical-occurrence accounting.
 
-The checkpoint schema is now `0.7.0` (independently of package release version).
+The checkpoint schema is now `0.8.0` (independently of package release version).
 Resume identity contains backend, parser and edge-schema versions, HAL checksum,
 direct parent map, tool paths, executable checksums and help-derived versions,
 plus status-policy version 1. The audited parser remains version 2; the PSL edge
@@ -253,7 +254,7 @@ evidence, not a biological copy. The piecewise backend partitions each input
 NodeBlock at normalized component boundaries and compares distinct target
 projections for each source atom.
 
-No projection is unaligned evidence; one projection is unique even when it
+No projection is unaligned evidence; one projection is atomwise unique even when it
 came from several source-disjoint records; two distinct projections over one
 source atom remain ambiguous. Exact duplicate geometry is counted once for
 classification while raw rows and line numbers remain in provenance. Source-
@@ -266,7 +267,7 @@ Cross-chromosome, orientation, and non-monotone-order fragments remain exact
 spatial evidence, while existing reconciliation continuity checks prevent
 merging across their boundaries. Gaps remain uncovered source evidence and
 are not called deletions. Inherited ambiguity or duplication dominates a
-current unique geometric mapping. This backend establishes a source-aware
+current atomwise unique geometric mapping. This backend establishes a source-aware
 geometric partition only; it does not establish biological copy correspondence
 or `halLiftover` transitivity.
 
@@ -287,7 +288,7 @@ are retained separately; equivalent strand-frame representations retain their
 original rows in raw PSL. Neither chain ID nor component number is a copy ID.
 
 A child block has one logical `child_occurrence_id`, even when it intersects
-many components or chains. Source-disjoint chains are separate unique synteny
+many components or chains. Source-disjoint chains are separate atomwise unique synteny
 pieces. Overlapping source coverage from distinct normalized mappings is an
 unresolved local alternative (raw ambiguous, effective duplicated). This policy
 is conservative even if two records share part of the same target placement.
@@ -317,7 +318,7 @@ provenance. Otherwise:
 3. overlapping chain alternatives → duplicated;
 4. one or more source-disjoint chain pieces → unique.
 
-Raw outcomes describe the overlay alone: unaligned, unique pieces, or ambiguous
+Raw outcomes describe the overlay alone: unaligned, atomwise unique pieces, or ambiguous
 alternatives. Inherited ambiguity dominates duplication even when there is only
 one chain. Standalone orientation/order conflicts retain their existing rules;
 complex classifications propagate ambiguity. No chain resolves old duplication.
@@ -382,3 +383,11 @@ This remains a controlled-testing backend. Multi-record/chain path identity,
 cross-child copy correspondence, duplication resolution, and halSynteny
 transitivity are unestablished. Synthetic results alone do not authorize a full
 Palaeognathae reconstruction.
+
+## Downward common refinement
+
+The optional root-to-leaf pass is described in [DOWNWARD_REFINEMENT.md](DOWNWARD_REFINEMENT.md).
+It inverse-projects boundaries only through stored length-preserving runs, keeps
+all ambiguous alternatives and provenance, and atomically writes an independent
+`downward/` package. Upward common refinement is always active in the tree runner;
+turning the optional downward pass on or off does not change upward inputs.

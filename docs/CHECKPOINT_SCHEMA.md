@@ -81,3 +81,17 @@ boundary diagnostics, raw outcome, effective status, inherited-barrier reason,
 and current-edge barrier reason. Changing this backend or policy makes older
 piecewise checkpoints stale; these artifacts describe geometric fragments and
 do not resolve biological copies.
+
+## Common refinement and downward outputs (0.8.0)
+
+Upward schema 0.8.0 requires common refinement in the tree runner: no adjacent
+atomic intervals are merged. The run identity includes downward schema/policy 1
+and `common-refinement-atoms-v1`, even when the optional downward pass is disabled.
+Old upward schemas and policy identities are stale and must be recomputed.
+
+The optional `downward/` package has separate schema/policy identity, a checksum
+for every upward node manifest, output checksums for all refined node files, and
+one atomic COMPLETE marker for the whole tree. Upward output packages are never
+modified by refinement. Resume rejects changed policy, input manifests or output
+bytes. See [DOWNWARD_REFINEMENT.md](DOWNWARD_REFINEMENT.md) for projection,
+provenance, file layout and statistics definitions.

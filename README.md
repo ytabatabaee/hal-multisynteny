@@ -10,6 +10,42 @@ which pairwise blocks are insufficient.
 > experiments, not VGP-scale production analysis, and should not be described as
 > a finished replacement for MAF2Synteny.
 
+## Common refinement and optional downward pass
+
+The tree runner preserves every upward atomic boundary: incorporating descendant
+breakpoints can split the global partition but cannot merge its blocks. This is
+an algorithmic invariant, not a biological statement about ancestral adjacency.
+Legacy single-node reconciliation still exposes its documented merge policy.
+Minimum-length filtering still applies upward; use `--min-block-length 1` when
+validating complete breakpoint retention.
+
+Add `--downward-refinement` to `run-tree` to propagate finalized parent boundaries
+back to every descendant using stored, length-preserving direct-edge runs.
+No HAL tools are invoked by the downward pass. Upward `nodes/` remain intact;
+refined blocks, occurrences, clipped mapping runs, breakpoint provenance,
+lineage, and statistics live under `downward/`.
+
+An existing schema 0.8.0 upward run can be refined independently:
+
+```bash
+hal-multisynteny refine-downward --tree tree.nwk --node-map node-map.tsv \
+  --output-dir pilot-run --resume
+```
+
+The pass preserves all unresolved projections as ambiguous hypotheses and never
+assigns biological copies or invents coordinates across gaps. Downward splitting
+has no minimum-length filter. See [the refinement policy](docs/DOWNWARD_REFINEMENT.md).
+
+Audit preserved Palaeognathae evidence without running HAL:
+
+```bash
+python -m scripts.audit_palaeognathae_overlap
+```
+
+The [audit report](experiments/psl-overlap/palaeognathae.md) covers all four
+available direct-edge PSL captures (24,000 sampled intervals), including
+source multiplicity, same-target overlaps, exact duplicates, and coverage.
+
 ## Algorithm
 
 An experimental `--backend hal-psl-conservative` is now available alongside
@@ -59,7 +95,7 @@ hal-multisynteny run-tree --backend hal-synteny-overlay \
   --min-block-length 1 --hal-synteny-min-block-size 1
 ```
 
-Checkpoint schema `0.7.0` rejects older checkpoints; use a fresh output directory.
+Checkpoint schema `0.8.0` rejects older checkpoints; use a fresh output directory.
 
 The input is a run-length table mapping collinear intervals in descendant
 genomes to one chosen ancestral genome in HAL. The builder:
@@ -274,7 +310,7 @@ hal-multisynteny init-leaves \
 Use `--backend fake --fake-mappings <tsv>` for deterministic tests and examples
 without HAL. The real backend uses batched direct `halLiftover` calls and accepts
 only strict whole-interval, length-preserving BED6 output. One exact mapping is
-`unique`; repeated identical rows collapse to the same mapping; multiple
+atomwise unique (stored as `unique`); repeated identical rows collapse to the same mapping; multiple
 distinct full-length mappings are retained as duplicated alternatives with
 deterministic copy IDs. Missing mappings are written as nonspatial
 `UnmappedEdgeEvidence` and do not create parent intervals. If gapped or shorter
@@ -342,7 +378,9 @@ source_anchor_id
 
 Coordinates are zero-based and half-open. Runs must be nonempty,
 length-preserving, and collinear; split gapped mappings before reconciliation.
-Statuses are `unique`, `duplicated`, `ambiguous`, and `unaligned`. The legacy
+Statuses are `unique`, `duplicated`, `ambiguous`, and `unaligned`. Here `unique`
+means atomwise unique (single projection per covered source atom), not biological
+copy identity or uniqueness. The legacy
 spelling `unmapped` is normalized to `unaligned`.
 
 ## Quick start
@@ -511,7 +549,7 @@ scripts/build_tiny_hal_fixture.sh
 
 It has four leaves under two named ancestors and a root, with logical guide-tree
 IDs intentionally different from HAL genome names. The fixture covers exact
-unique mapping, inversion, unmapped evidence, and split/gapped liftover audit
+atomwise unique mapping, inversion, unmapped evidence, and split/gapped liftover audit
 behavior. A genuine duplication assertion is documented as a current limitation
 until a real HAL fixture demonstrates reproducible duplicate-edge behavior.
 

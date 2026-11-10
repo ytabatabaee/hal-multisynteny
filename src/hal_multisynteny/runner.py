@@ -56,7 +56,7 @@ class CheckpointError(RuntimeError):
     """Raised for stale, incomplete, or invalid checkpoint packages."""
 
 
-CHECKPOINT_SCHEMA_VERSION = "0.7.0"
+CHECKPOINT_SCHEMA_VERSION = "0.8.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +87,7 @@ class RunTreeConfig:
     close_unmerged_threshold: int = 1000
     fake_mappings: str | None = None
     hal: str | None = None
+    downward_refinement: bool = False
 
 
 def init_leaf_packages(
@@ -185,6 +186,7 @@ def run_tree(
                 boundary_tolerance=config.boundary_tolerance,
                 max_merge_gap=config.max_merge_gap,
                 copy_id_scope=config.copy_id_scope,
+                preserve_atomic_boundaries=True,
                 guide_tree_id=plan.tree_sha256,
             ),
         )
@@ -267,6 +269,10 @@ def run_tree(
         },
     )
     _write_tree_statistics(output, plan)
+    if config.downward_refinement:
+        from .downward import refine_tree
+        refine_tree(tree_path=tree_path, node_map_path=node_map_path, output_dir=output,
+                    resume=config.resume and not config.force_node)
     return plan_payload
 
 
@@ -793,6 +799,8 @@ def _run_identity(
         "backend": config.backend,
         "fake_mapping_sha256": sha256_file(config.fake_mappings) if config.fake_mappings else "",
     }
+    from .downward import downward_identity
+    identity["downward"] = downward_identity()
     if hal_info is not None:
         identity["hal_sha256"] = hal_info.get("hal_sha256", "")
         identity["hal_path"] = hal_info.get("hal_path", "")
