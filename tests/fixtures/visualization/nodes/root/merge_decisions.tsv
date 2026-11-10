@@ -1,0 +1,2 @@
+parent_node	parent_chrom	left_start	left_end	right_start	right_end	can_merge	accepted_reason	rejection_reasons	parent_gap	left_child_gaps	right_child_gaps
+root	chr1	0	50	50	100	True	shared boundary compatible		0		

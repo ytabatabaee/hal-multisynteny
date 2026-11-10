@@ -1,0 +1,3 @@
+block_id	occurrence_id	leaf	chrom	start	end	strand	copy_id	status	source	node	node_chrom	node_start	node_end
+b.shared	leaf.occ1	left	leftChr	0	100	+	1	unique	synthetic	root	chr1	0	100
+b.left	leaf.occ2	left	leftChr	100	160	-	copy2	duplicated	synthetic	root	chr1	120	180

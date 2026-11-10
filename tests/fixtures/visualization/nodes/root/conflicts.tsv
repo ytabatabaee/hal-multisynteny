@@ -1,0 +1,2 @@
+parent_node	parent_chrom	parent_start	parent_end	conflict_type	left_block_ids	right_block_ids	left_copies	right_copies	explanation	resolution
+root	chr1	200	260	orientation_conflict	b.conflict	b.conflict	1	1	reverse edge evidence	unresolved

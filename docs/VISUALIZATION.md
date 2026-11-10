@@ -10,12 +10,19 @@ hal-multisynteny visualize-run --run-dir pilot-run --node PalaeognathaeAnc0 \
   --chrom chr1 --start 1000000 --end 2000000 --output pilot-run/chr1.html
 ```
 
+The committed synthetic example uses `tests/fixtures/visualization`, which
+contains parent atoms/blocks, both direct-child mapping tables, node and leaf
+occurrences, all four mapping statuses, merge/conflict records, downward
+lineage, and propagated breakpoints.
+
 The loader uses the authoritative `blocks.tsv`, `atomic_intervals.tsv`,
 `node_occurrences.tsv`, `leaf_occurrences.tsv`, edge-run tables,
 `merge_decisions.tsv`, `conflicts.tsv`, downward `blocks.tsv`, and
 `breakpoints.json`. Coordinates are zero-based, half-open. Parent blocks use a
-common coordinate scale; arrows encode strand, separate rows preserve
-occurrences/copies, and gaps are left blank. Classifications use a
+common coordinate scale; arrows encode recorded strand, separate mapping,
+node-occurrence, and leaf-occurrence rows preserve copies, and gaps are left
+blank. Point boundaries are drawn as vertical markers with left-edge inclusion
+and right-edge exclusion. Classifications use a
 colorblind-friendly palette plus text labels. Missing or one-sided evidence is
 not a confirmed deletion.
 

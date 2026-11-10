@@ -73,6 +73,7 @@ def load_run(run_dir: str | Path, node: str) -> dict:
     for side in ("left", "right"):
         for row in _read(up / f"{side}_edge_runs.tsv"):
             row = dict(row); row["side"] = side; row["object_type"] = "mapping"
+            row["mapping_status"] = row.get("status", "unaligned") or "unaligned"
             row["parent_start"] = int(row["parent_start"]); row["parent_end"] = int(row["parent_end"])
             row["child_start"] = int(row["child_start"]); row["child_end"] = int(row["child_end"])
             edge.append(row)
@@ -138,6 +139,64 @@ def load_run(run_dir: str | Path, node: str) -> dict:
             "chromosomes": parent_chroms, "stats": _json(up / "summary.json", {})}
 
 
+def select_objects(model, region, stage="upward", representation="merged"):
+    """Return objects for one coherent stage/representation combination."""
+    if stage not in {"upward", "downward"} or representation not in {"atomic", "merged"}:
+        raise ValueError("stage must be upward/downward and representation atomic/merged")
+    if stage == "downward" and representation == "atomic":
+        raise ValueError("downward atomic representation is unavailable")
+    key = "atoms" if representation == "atomic" else ("blocks" if stage == "upward" else "downward_blocks")
+    return model[key]
+
+
+def joined_details(model, obj):
+    """Build deterministic display-only joins; raw checkpoint rows are preserved."""
+    chrom = obj.get("chrom") or obj.get("parent_chrom")
+    start = obj.get("start", obj.get("parent_start", 0))
+    end = obj.get("end", obj.get("parent_end", 0))
+    block_id = obj.get("block_id") or obj.get("atom_id") or obj.get("child_block_id")
+    overlap = lambda row: row.get("parent_chrom", row.get("chrom")) == chrom and int(row.get("parent_end", row.get("end", 0))) > start and int(row.get("parent_start", row.get("start", 0))) < end
+    parent = next((b for b in model["blocks"] if b.get("block_id") == block_id), None)
+    detail = {"object": obj, "parent_block": parent, "atomic_intervals": [], "left_mappings": [],
+              "right_mappings": [], "node_occurrences": [], "leaf_occurrences": [], "merge_decisions": [],
+              "conflicts": [], "downward_descendants": [], "lineage": [], "boundaries": []}
+    if parent:
+        detail["atomic_intervals"] = [a for a in model["atoms"] if a.get("block_id") == block_id or overlap(a)]
+        detail["merge_decisions"] = [m for m in model["merges"] if m.get("parent_chrom") == chrom and
+                                      int(m.get("right_end", 0)) > start and int(m.get("left_start", 0)) < end]
+        detail["conflicts"] = [c for c in model["conflicts"] if overlap(c)]
+    detail["left_mappings"] = [r for r in model["mappings"] if r.get("side") == "left" and overlap(r)]
+    detail["right_mappings"] = [r for r in model["mappings"] if r.get("side") == "right" and overlap(r)]
+    detail["node_occurrences"] = [r for r in model["occurrences"] if r.get("object_type") == "node_occurrence" and overlap(r)]
+    detail["leaf_occurrences"] = [r for r in model["occurrences"] if r.get("object_type") == "leaf_occurrence" and overlap(r)]
+    detail["lineage"] = [r for r in model["lineage"] if r.get("original_block_id") == block_id or r.get("block_id") == block_id]
+    descendants = {r.get("block_id") for r in detail["lineage"] if r.get("block_id")}
+    detail["downward_descendants"] = [b for b in model["downward_blocks"] if b.get("block_id") in descendants]
+    detail["boundaries"] = [b for b in model["boundaries"] if b.get("record", {}).get("origin_block") == block_id or overlap(b)]
+    return detail
+
+
+def region_summary(model, region):
+    objs = region["objects"]
+    blocks = objs["blocks"]
+    atoms = objs["atoms"]
+    down = objs["downward_blocks"]
+    mappings = objs["mappings"]
+    sizes = sorted(b["end"] - b["start"] for b in blocks)
+    lineage_counts = Counter(r.get("original_block_id") for r in model["lineage"] if r.get("original_block_id") in {b.get("block_id") for b in blocks})
+    split = sum(v > 1 for v in lineage_counts.values())
+    return {"atomic_intervals": len(atoms), "upward_blocks": len(blocks), "downward_blocks": len(down),
+            "split_blocks": split, "split_fraction": split / len(blocks) if blocks else 0.0,
+            "left_mappings": sum(r.get("side") == "left" for r in mappings),
+            "right_mappings": sum(r.get("side") == "right" for r in mappings),
+            "node_occurrences": sum(r.get("object_type") == "node_occurrence" for r in objs["occurrences"]),
+            "leaf_occurrences": sum(r.get("object_type") == "leaf_occurrence" for r in objs["occurrences"]),
+            "conflicts": sum(1 for c in model["conflicts"] if c.get("parent_chrom") == region["chrom"] and int(c.get("parent_end", 0)) > region["start"] and int(c.get("parent_start", 0)) < region["end"]),
+            "classifications": dict(Counter(b.get("classification", "") for b in blocks)),
+            "mapping_status": dict(Counter(r.get("mapping_status", "unaligned") for r in mappings)),
+            "block_size": {"count": len(sizes), "min": min(sizes) if sizes else 0, "median": statistics.median(sizes) if sizes else 0, "max": max(sizes) if sizes else 0}}
+
+
 def _intersects(obj, chrom, start, end):
     return obj.get("chrom") == chrom and obj.get("end", 0) > start and obj.get("start", 0) < end
 
@@ -151,7 +210,7 @@ def _region_objects(model, chrom, start, end):
         if key == "mappings":
             selected[key] = [r for r in rows if r.get("parent_chrom") == chrom and r["parent_end"] > start and r["parent_start"] < end]
         elif key == "boundaries":
-            selected[key] = [r for r in rows if r.get("chrom") == chrom and start <= r.get("start", 0) <= end]
+            selected[key] = [r for r in rows if r.get("chrom") == chrom and start <= r.get("start", 0) < end]
         else:
             selected[key] = [r for r in rows if _intersects(r, chrom, start, end)]
     return selected
@@ -221,8 +280,9 @@ def _safe_json(payload):
 
 
 def render_html(model: dict, region: dict, output: str | Path) -> None:
-    summary = _summary(model)
-    payload = {"node": model["node"], "children": model["children"], "chromosomes": model["chromosomes"], "region": region,
+    summary = region_summary(model, region)
+    payload = {"node": model["node"], "children": model["children"], "chromosomes": [region["chrom"]],
+               "model_chromosomes": model["chromosomes"], "region": region,
                "summary": summary, "objects": region["objects"], "merges": model["merges"],
                "conflicts": model["conflicts"], "lineage": model["lineage"],
                "manifest": model["manifest"], "classifications": CLASSIFICATIONS, "statuses": STATUSES}
@@ -240,12 +300,13 @@ function matches(x){let q=$('search').value.toLowerCase(),c=$('class').value,s=$
 function items(){let o=D.objects,k=$('kind').value,v=$('view').value;let a=k==='atomic'?o.atoms:(v==='downward'?o.downward_blocks:o.blocks);return (a||[]).filter(x=>num(x.end)>state.start&&num(x.start)<state.end&&matches(x))}
 function evidence(){return $('lanes').checked?D.objects.mappings.filter(x=>x.parent_chrom===state.chrom&&x.parent_end>state.start&&x.parent_start<state.end&&matches(x)):[]}
 function lane(name,items,coord,w){let row=document.createElement('div');row.className='lane';let label=document.createElement('b');label.textContent=name;row.append(label);for(const x of items){let s=coord?x.parent_start:x.start,e=coord?x.parent_end:x.end;if(e<=state.start||s>=state.end)continue;let el=document.createElement('button');el.type='button';el.className='item'+(x.strand==='-'?' reverse':'');el.textContent=text(x.block_id||x.atom_id||x.child_block_id)+(x.strand==='-'?' ◀':' ▶');el.style.left=((s-state.start)/(state.end-state.start)*w)+'px';el.style.width=Math.max(3,(Math.min(e,state.end)-Math.max(s,state.start))/(state.end-state.start)*w)+'px';el.style.background=C[x.classification]||'#ddd';el.addEventListener('click',()=>detail(x));row.append(el)}return row}
-function draw(){let w=Math.max(850,(state.end-state.start)*scale/2),track=$('track');track.replaceChildren();track.style.width=w+'px';let a=items();track.append(lane('Parent '+($('kind').value==='atomic'?'atoms':($('view').value==='downward'?'downward blocks':'blocks')),a,false,w));if($('lanes').checked){let by={};for(const x of evidence())(by[x.side||'child']??=[]).push(x);for(const [side,rows] of Object.entries(by))track.append(lane(side+' evidence',rows,true,w))}if($('view').value==='upward'&&D.objects.downward_blocks.length)track.append(lane('Downward blocks',D.objects.downward_blocks.filter(matches),false,w));if($('bounds').checked)track.append(lane('Propagated boundaries',D.objects.boundaries,true,w));$('meta').textContent='node '+D.node+'; children '+D.children.join(', ')+'; '+state.chrom+':'+state.start+'-'+state.end+(D.region.automatic?' (automatic: '+D.region.reason+')':'');$('warning').textContent='Loaded extent is '+D.region.chrom+':'+D.region.start+'-'+D.region.end+'; edits stay inside it. Missing or one-sided evidence is not a confirmed biological deletion.'+(D.summary.downward_blocks===null?' Downward refinement unavailable.':'');drawPlot()}
+function points(name,items,w){let row=document.createElement('div');row.className='lane';let label=document.createElement('b');label.textContent=name;row.append(label);for(const x of items){if(x.start<state.start||x.start>=state.end)continue;let el=document.createElement('button');el.type='button';el.className='boundary';el.title='propagated boundary at '+x.chrom+':'+x.start;el.style.left=((x.start-state.start)/(state.end-state.start)*w)+'px';el.addEventListener('click',()=>detail(x));row.append(el)}return row}
+function draw(){let w=Math.max(850,(state.end-state.start)*scale/2),track=$('track');track.replaceChildren();track.style.width=w+'px';let a=items();track.append(lane('Parent '+($('kind').value==='atomic'?'atoms':($('view').value==='downward'?'downward blocks':'blocks')),a,false,w));if($('lanes').checked){let by={};for(const x of evidence())(by[x.side||'child']??=[]).push(x);for(const [side,rows] of Object.entries(by))track.append(lane(side+' mappings',rows,true,w));let byOcc={};for(const x of D.objects.occurrences.filter(x=>x.chrom===state.chrom&&x.end>state.start&&x.start<state.end&&matches(x)))(byOcc[x.object_type]??=[]).push(x);for(const [kind,rows] of Object.entries(byOcc))track.append(lane(kind.replace('_',' '),rows,false,w))}if($('view').value==='upward'&&D.objects.downward_blocks.length)track.append(lane('Downward blocks',D.objects.downward_blocks.filter(matches),false,w));if($('bounds').checked)track.append(points('Propagated boundaries',D.objects.boundaries.filter(x=>matches(x)),w));$('meta').textContent='node '+D.node+'; children '+D.children.join(', ')+'; '+state.chrom+':'+state.start+'-'+state.end+(D.region.automatic?' (automatic: '+D.region.reason+')':'');$('warning').textContent='Loaded extent is '+D.region.chrom+':'+D.region.start+'-'+D.region.end+'; edits stay inside it. Missing or one-sided evidence is not a confirmed biological deletion.'+(D.summary.downward_blocks===null?' Downward refinement unavailable.':'');drawPlot()}
 function drawPlot(){let svg=$('plot');svg.replaceChildren();let vals=[['atomic intervals',D.summary.atomic_blocks],['reconciled blocks',D.summary.upward_blocks],['downward blocks',D.summary.downward_blocks||0],['split blocks',D.summary.split_blocks],['left mappings',D.summary.left_mapping_runs],['right mappings',D.summary.right_mapping_runs],['occurrences',D.summary.occurrences],['conflicts',D.summary.conflicts]],m=Math.max(...vals.map(x=>x[1]),1);for(let i=0;i<vals.length;i++){let t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x','5');t.setAttribute('y',String(20+i*30));t.textContent=vals[i][0]+' '+vals[i][1];svg.append(t);let r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('x','180');r.setAttribute('y',String(7+i*30));r.setAttribute('width',String(600*vals[i][1]/m));r.setAttribute('height','18');r.setAttribute('fill','#0072B2');svg.append(r)}let c=document.createElementNS('http://www.w3.org/2000/svg','text');c.setAttribute('x','5');c.setAttribute('y','265');c.textContent='classifications: '+Object.entries(D.summary.classifications).map(x=>x[0]+'='+x[1]).join(', ');svg.append(c)}
 function addOption(sel,value,label){let o=document.createElement('option');o.value=value;o.textContent=label||value;sel.append(o)}
 function fill(){let chrom=$('chrom');chrom.replaceChildren();for(const c of D.chromosomes)addOption(chrom,c);chrom.value=state.chrom;$('start').value=state.start;$('end').value=state.end;for(const c of D.classifications)addOption($('class'),c);for(const s of D.statuses)addOption($('status'),s);$('view').options[1].disabled=!D.objects.downward_blocks.length;if(D.chromosomes.length===1){chrom.disabled=true;chrom.title='Only one chromosome is embedded in this bounded preview.'}}
-function apply(){let c=$('chrom').value,s=num($('start').value),e=num($('end').value);if(c!==D.region.chrom||s<D.region.start||e>D.region.end||e<=s){$('warning').textContent='Requested region is outside the embedded bounded preview '+D.region.chrom+':'+D.region.start+'-'+D.region.end+'.';return}state={chrom:c,start:s,end:e};draw()}
-$('apply').addEventListener('click',apply);$('zin').addEventListener('click',()=>{let c=(state.start+state.end)/2,d=(state.end-state.start)/3;state.start=Math.max(D.region.start,Math.floor(c-d));state.end=Math.min(D.region.end,Math.ceil(c+d));draw()});$('zout').addEventListener('click',()=>{let c=(state.start+state.end)/2,d=(state.end-state.start)*1.5;state.start=Math.max(D.region.start,Math.floor(c-d));state.end=Math.min(D.region.end,Math.ceil(c+d));draw()});$('reset').addEventListener('click',()=>{state={chrom:D.region.chrom,start:D.region.start,end:D.region.end};draw()});for(const id of ['view','kind','class','status','lanes','bounds','search'])$(id).addEventListener('input',draw);fill();draw();</script></body></html>"""
+function apply(){let c=$('chrom').value,s=num($('start').value),e=num($('end').value);if(c!==D.region.chrom||s<D.region.start||e>D.region.end||e<=s){$('start').value=state.start;$('end').value=state.end;$('chrom').value=state.chrom;$('warning').textContent='Requested region is outside the embedded bounded preview '+D.region.chrom+':'+D.region.start+'-'+D.region.end+'. Controls restored to the last valid region.';return}state={chrom:c,start:s,end:e};draw()}
+$('apply').addEventListener('click',apply);$('zin').addEventListener('click',()=>{let c=(state.start+state.end)/2,d=(state.end-state.start)/3;state.start=Math.max(D.region.start,Math.floor(c-d));state.end=Math.min(D.region.end,Math.ceil(c+d));draw()});$('zout').addEventListener('click',()=>{let c=(state.start+state.end)/2,d=(state.end-state.start)*1.5;state.start=Math.max(D.region.start,Math.floor(c-d));state.end=Math.min(D.region.end,Math.ceil(c+d));draw()});$('reset').addEventListener('click',()=>{state={chrom:D.region.chrom,start:D.region.start,end=D.region.end};draw()});$('view').addEventListener('input',()=>{$('kind').options[0].disabled=$('view').value==='downward';if($('view').value==='downward')$('kind').value='merged';draw()});for(const id of ['kind','class','status','lanes','bounds','search'])$(id).addEventListener('input',draw);fill();draw();</script></body></html>"""
     Path(output).write_text(page, encoding="utf-8")
 
 

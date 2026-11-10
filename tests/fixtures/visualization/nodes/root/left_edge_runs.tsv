@@ -1,0 +1,3 @@
+child_node	child_block_id	child_occurrence_id	child_chrom	child_start	child_end	parent_node	parent_chrom	parent_start	parent_end	strand	copy_id	status	source_anchor_id	classification
+left	left.b1	left.occ1	leftChr	0	50	root	chr1	0	50	+	1	unique	anchor-left-1	shared_consistent
+left	left.b1	left.occ2	leftChr	100	150	root	chr1	120	170	-	copy2	duplicated	anchor-left-2	left_only

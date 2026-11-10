@@ -2,7 +2,14 @@ import json
 
 import pytest
 
-from hal_multisynteny.visualize import load_run, render_html, select_region
+from hal_multisynteny.visualize import (
+    joined_details,
+    load_run,
+    region_summary,
+    render_html,
+    select_objects,
+    select_region,
+)
 
 
 def _run(tmp_path):
@@ -72,3 +79,23 @@ def test_lineage_split_count_uses_records_not_block_id(tmp_path):
     ]
     from hal_multisynteny.visualize import _summary
     assert _summary(model)["split_blocks"] == 1
+
+
+def test_representative_fixture_has_joined_evidence():
+    from pathlib import Path
+    model = load_run(Path("tests/fixtures/visualization"), "root")
+    region = select_region(model, "chr1", 0, 260, max_blocks=1000)
+    assert {r["mapping_status"] for r in model["mappings"]} == {"unique", "duplicated", "ambiguous", "unaligned"}
+    assert len(region["objects"]["occurrences"]) == 4
+    assert len(region["objects"]["boundaries"]) == 3
+    assert len(select_objects(model, region, "upward", "atomic")) == 3
+    assert len(select_objects(model, region, "upward", "merged")) == 3
+    assert len(select_objects(model, region, "downward", "merged")) == 2
+    with pytest.raises(ValueError, match="downward atomic"):
+        select_objects(model, region, "downward", "atomic")
+    detail = joined_details(model, model["blocks"][0])
+    assert detail["left_mappings"] and detail["right_mappings"]
+    assert detail["merge_decisions"] and detail["conflicts"] == []
+    assert detail["lineage"] and detail["downward_descendants"]
+    summary = region_summary(model, region)
+    assert summary["atomic_intervals"] == 3 and summary["downward_blocks"] == 2

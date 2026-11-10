@@ -1,0 +1,3 @@
+child_node	child_block_id	child_occurrence_id	child_chrom	child_start	child_end	parent_node	parent_chrom	parent_start	parent_end	strand	copy_id	status	source_anchor_id	classification
+right	right.b1	right.occ1	rightChr	0	50	root	chr1	0	50	+	1	ambiguous	anchor-right-1	shared_consistent
+right	right.b2	right.occ1	rightChr2	200	250	root	chr1	200	250	-	1	unaligned	anchor-right-2	orientation_conflict
