@@ -129,3 +129,11 @@ current segment chaining rejects even a short non-adjacent gap because exact
 child adjacency is required, while repeated native target geometries remain
 ambiguous with unresolved copy identity. Gap-tolerant chaining and native
 paralogy extraction are not yet implemented.
+Implemented persistent native segment-index infrastructure in
+`src/hal_multisynteny/native_index.py` and
+`scripts/build_native_segment_index.py`. It streams one direct edge into an
+atomic SQLite database with child/parent coordinate indexes, identity metadata,
+deterministic overlap queries, and interrupted-build cleanup. The Palaeognathae
+comparison remains pending because building the two large direct-edge indexes
+is still an expensive one-time scan; no partial extraction is treated as
+complete evidence.

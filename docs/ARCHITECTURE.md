@@ -419,3 +419,8 @@ inherited barrier reason. This allows the root reconciliation to use both child
 subtrees while conservatively preventing a chain from crossing a rearrangement
 boundary established in one descendant clade; it is not a weighted support
 score.
+
+The persistent native index is deliberately separate from ordinary run
+checkpoints. It is an atomic SQLite artifact keyed by HAL identity and direct
+edge, with child/parent interval indexes and a completeness marker. Region
+analysis may reuse it, but whole-genome extraction behavior remains unchanged.

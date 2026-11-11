@@ -49,6 +49,11 @@ that the current policy rejects both short and long non-adjacent segments
 multiple native target geometries as ambiguous unresolved alternatives. It does
 not claim gap-tolerant chaining or native paralogy resolution.
 
+`tests/test_native_index.py` covers child- and parent-coordinate overlap
+queries, identity metadata, and interrupted-build cleanup. The index builder is
+streaming and disk-backed; generated SQLite stores are temporary experiment
+artifacts and are not committed.
+
 Run the complete local integration smoke:
 
 ```bash

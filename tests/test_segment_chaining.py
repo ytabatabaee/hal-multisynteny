@@ -44,6 +44,8 @@ def test_native_interval_index_handles_nested_overlap_and_boundaries():
 
 @pytest.mark.hal
 def test_native_extract_projects_unsorted_segments_and_reverse_strand(monkeypatch):
+    if shutil.which("halAlignedExtract") is None:
+        pytest.skip("halAlignedExtract is not on PATH")
     hal = Path("tests/fixtures/tiny_hal/build/tiny.hal")
     extractor = NativeSegmentExtractor(hal)
     rows = (

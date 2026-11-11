@@ -108,3 +108,10 @@ options. Cache reads are streamed, and a centered interval index performs the
 child-block join without restarting a scan at the first block for every native
 segment. The implementation targets `O(S log S + B log B + K)` behavior while
 preserving every overlap; native input order is not assumed to be sorted.
+
+For repeated bounded queries, `scripts/build_native_segment_index.py` builds an
+atomic SQLite store with child- and parent-coordinate indexes. Metadata records
+the HAL checksum, direct edge, tool version, segment count, and completion
+marker. An interrupted process removes the temporary database and cannot be
+mistaken for a comprehensive index; `query_index` supports overlap queries in
+either coordinate frame without loading the edge into Python memory.

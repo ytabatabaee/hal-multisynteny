@@ -1,0 +1,36 @@
+import sys
+
+import pytest
+
+from hal_multisynteny.extract import ExtractionError
+from hal_multisynteny.native_index import build_index, query_index
+
+
+def _tool(tmp_path, rows, exit_code=0):
+    path = tmp_path / "halAlignedExtract"
+    body = "\n".join(rows)
+    path.write_text(f"#!{sys.executable}\nprint({body!r})\nraise SystemExit({exit_code})\n")
+    path.chmod(0o755)
+    return str(path)
+
+
+def test_native_index_queries_both_coordinate_frames_and_identity(tmp_path):
+    hal = tmp_path / "x.hal"
+    hal.write_bytes(b"controlled-hal")
+    tool = _tool(tmp_path, ["chr1\t0\t10\tanc\t100\t110\t+", "chr1\t20\t30\tanc\t200\t210\t-"])
+    output = tmp_path / "edge.sqlite"
+    result = build_index(hal, "child", "parent", output, tool)
+    assert result["segments"] == 2 and result["complete"] == "1"
+    assert next(query_index(output, child_chrom="chr1", child_start=5, child_end=25))[1:3] == (0, 10)
+    assert next(query_index(output, parent_chrom="anc", parent_start=205, parent_end=220))[4:6] == (200, 210)
+
+
+def test_interrupted_native_index_is_not_finalized(tmp_path):
+    hal = tmp_path / "x.hal"
+    hal.write_bytes(b"controlled-hal")
+    tool = _tool(tmp_path, ["chr1\t0\t10\tanc\t100\t110\t+"], exit_code=7)
+    output = tmp_path / "edge.sqlite"
+    with pytest.raises(ExtractionError):
+        build_index(hal, "child", "parent", output, tool)
+    assert not output.exists()
+    assert not output.with_suffix(".tmp").exists()
