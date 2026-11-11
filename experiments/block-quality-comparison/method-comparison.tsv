@@ -1,0 +1,7 @@
+region_bp	method	status	blocks	mean_bp	median_bp	q25_bp	q75_bp	max_bp	covered_span_bp	aligned_bp	unsupported_gap_bp
+100000	method1_halsynteny	blocked	NA	NA	NA	NA	NA	NA	NA	NA	NA
+100000	method3_strict	complete	1553	64.403	22	11	54	1417	100018	100018	0
+100000	method3_gap_1kb	complete	1014	98.637	18.5	9	60	8747	100018	100018	0
+10000000	method1_halsynteny	blocked	NA	NA	NA	NA	NA	NA	NA	NA	NA
+10000000	method3_strict	complete	109323	91.473	24	10	78	8376	10000150	10000150	0
+10000000	method3_gap_1kb	complete	84009	119.037	16	8	51	90830	10000150	10000150	0

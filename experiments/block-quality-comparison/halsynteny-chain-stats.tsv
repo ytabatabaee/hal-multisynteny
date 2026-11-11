@@ -1,0 +1,5 @@
+region_bp	child_genome	parent_genome	query_chromosome	status	wall_seconds	output_bytes	block_count	block_mean_bp	block_median_bp	block_max_bp
+100000	GCF_036417845.1	PalaeognathaeAnc3	NC_089979.1	blocked_interrupted	194.69	0	NA	NA	NA	NA
+100000	GCF_036370855.1	PalaeognathaeAnc3	NC_088099.1	not_started	NA	NA	NA	NA	NA	NA
+1000000	GCF_036417845.1	PalaeognathaeAnc3	NC_089979.1	blocked_by_same_preprocessing	NA	NA	NA	NA	NA	NA
+10000000	GCF_036417845.1	PalaeognathaeAnc3	NC_089979.1	blocked_by_same_preprocessing	NA	NA	NA	NA	NA	NA

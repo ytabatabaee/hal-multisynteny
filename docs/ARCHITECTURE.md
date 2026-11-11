@@ -451,3 +451,10 @@ reconciliation. Internal nodes retain direct edge runs and reconciliation
 components, while leaf descendants are reconstructed on demand by streaming
 only overlapping edge rows. Biological rules and checkpoint provenance remain
 unchanged; only descendant materialization timing changes.
+
+Method-comparison diagnostics are intentionally downstream of the production
+reconciliation. `scripts/analyze_fragmentation.py` treats merge-decision reason
+sets as overlapping evidence and assigns a separate deterministic primary
+reason only for accounting. `scripts/plot_fragmentation.py` renders native
+edge evidence, atomic classifications, blocks, and rejected boundaries without
+turning diagnostic PSL samples into traversal inputs.

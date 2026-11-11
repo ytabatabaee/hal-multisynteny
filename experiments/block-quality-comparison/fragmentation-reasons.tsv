@@ -1,0 +1,6 @@
+primary_reason	boundaries	fraction_rejected	affected_span_bp	fraction_rejected_span	gap_q25	gap_median	gap_q75	neighbor_length_median	secondary_reason_combinations
+chromosome_transition	17	0.00015550	189	0.00007801	0.0	0.0	0.0	4.5	34648
+classification_barrier	83302	0.76198752	1510411	0.62340569	0.0	0.0	0.0	7.0	83302
+complex_conflict	61	0.00055798	2974	0.00122749	0.0	0.0	0.0	8.0	61
+duplication_conflict	557	0.00509504	12025	0.00496319	0.0	0.0	0.0	7.0	557
+non_monotonic_order	25385	0.23220395	897239	0.37032563	0.0	0.0	0.0	8.0	108696

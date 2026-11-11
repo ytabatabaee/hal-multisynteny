@@ -227,3 +227,24 @@ Using the indexed Palaeognathae HAL and the two-leaf Anc3 subtree, compact
 direct ancestry links, with zero eager internal leaf occurrences. Results and
 commands are in `experiments/compact-ancestry-10mb/REPORT.md`. These are
 engineering measurements, not genome-wide biological conclusions.
+
+## 2026-11-11 — Method 1/Method 3 fragmentation diagnosis
+
+The installed HAL v2.2 `halSynteny` advertises `--queryChromosome` but no
+ancestral interval restriction. A chromosome-bounded attempt on the first
+Palaeognathae child edge ran for 194.69 s, produced a zero-byte PSL, and was
+interrupted; the earlier whole-edge attempt ran 313.53 s before interruption.
+No partial PSL was treated as a completed Method 1 chain result.
+
+The complete 10-Mb Method 3 boundary audit found 109,322 rejected joins. The
+primary reasons were classification/inherited barriers (83,302; 76.2%) and
+non-monotonic child order (25,385; 23.2%); raw overlapping counts included
+34,648 chromosome transitions, 34,628 orientation transitions, and
+61,808/48,684 forward/reverse non-collinearity reasons. Revised 100-kb gap
+thresholds saturated at 1,009 blocks by 10 kb; 50 kb added no further joins.
+
+The diagnostic report, reusable scripts, compact tables, and SVG/PDF/PNG
+figures are in `experiments/block-quality-comparison/`. Anura was not present
+locally, so no cross-clade run was attempted. The recommended next step is a
+bounded/precomputed halSynteny path, followed by controlled anchor-chaining
+evaluation; production reconciliation semantics remain unchanged.

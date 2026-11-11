@@ -83,3 +83,9 @@ Compact-mode tests cover reverse-strand projection, selected-leaf pruning,
 unsupported-gap preservation, and equivalence with legacy explicit leaf
 occurrences. Real compact benchmarks use the same native indexed HAL inputs as
 the legacy runs and are recorded under `experiments/compact-ancestry-10mb/`.
+
+The Method 1/Method 3 comparison is reproducible without large artifacts:
+run `scripts/analyze_fragmentation.py` against a completed Method 3 node
+checkpoint and `scripts/plot_fragmentation.py` for bounded SVG views. Complete
+halSynteny outputs are a prerequisite for Method 1 quality statistics; an
+interrupted or zero-byte PSL is a blocker, not a passing fixture.

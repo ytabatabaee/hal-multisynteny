@@ -1,0 +1,10 @@
+region_bp	parent_gap_bp	child_gap_bp	blocks	mean_bp	median_bp	max_bp	accepted_joins	classification_counts_unchanged	status
+100000	0	0	1553	64.403	22	1417	2556	true	complete
+100000	100	100	1025	97.579	19	6947	3084	true	complete
+100000	1000	1000	1014	98.637	18.5	8747	3095	true	complete
+100000	10000	10000	1009	99.126	18	8747	3100	true	complete
+100000	50000	50000	1009	99.126	18	8747	3100	true	complete
+10000000	0	0	109323	91.473	24	8376	256097	true	complete
+10000000	1000	1000	84009	119.037	16	90830	281411	true	complete
+10000000	10000	10000	NA	NA	NA	NA	NA	NA	not_run_resource_budget
+10000000	50000	50000	NA	NA	NA	NA	NA	NA	not_run_resource_budget
