@@ -14,13 +14,42 @@ from .utils import sha256_file
 TOOL_VERSION = "v2.2"
 
 
-def index_identity(hal_path: str | Path, child: str, parent: str, executable: str) -> str:
-    digest = sha256_file(hal_path)
+def index_identity(hal_path: str | Path, child: str, parent: str, executable: str, hal_sha256: str | None = None) -> str:
+    digest = hal_sha256 or sha256_file(hal_path)
     return hashlib.sha256(f"{digest}\0{child}\0{parent}\0{executable}\0{TOOL_VERSION}\0viewParentCoords".encode()).hexdigest()
 
 
-def index_path(index_dir: str | Path, hal_path: str | Path, child: str, parent: str, executable: str) -> Path:
-    return Path(index_dir) / f"{index_identity(hal_path, child, parent, executable)}.sqlite"
+def index_path(index_dir: str | Path, hal_path: str | Path, child: str, parent: str, executable: str,
+              hal_sha256: str | None = None) -> Path:
+    return Path(index_dir) / f"{index_identity(hal_path, child, parent, executable, hal_sha256)}.sqlite"
+
+
+def validate_index(path: str | Path, hal_path: str | Path, child: str, parent: str, executable: str,
+                   hal_sha256: str | None = None) -> dict[str, str]:
+    """Validate identity, completeness, schema, row count, and SQLite integrity."""
+    expected = index_identity(hal_path, child, parent, executable, hal_sha256)
+    conn = sqlite3.connect(path)
+    try:
+        integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        if integrity != "ok":
+            raise ExtractionError(f"native segment index integrity check failed: {integrity}")
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table','index')")}
+        required = {"metadata", "segments", "segments_child", "segments_parent"}
+        if not required <= tables:
+            raise ExtractionError(f"native segment index missing schema objects: {sorted(required - tables)}")
+        metadata = dict(conn.execute("SELECT key,value FROM metadata"))
+        expected_values = {"complete": "1", "hal_sha256": hal_sha256 or sha256_file(hal_path),
+                           "child": child, "parent": parent, "tool_version": TOOL_VERSION,
+                           "identity": expected}
+        for key, value in expected_values.items():
+            if metadata.get(key) != value:
+                raise ExtractionError(f"native segment index metadata mismatch for {key}")
+        count = conn.execute("SELECT COUNT(*) FROM segments").fetchone()[0]
+        if int(metadata.get("segment_count", -1)) != count:
+            raise ExtractionError("native segment index row count does not match metadata")
+        return metadata
+    finally:
+        conn.close()
 
 
 def build_index(hal_path: str | Path, child: str, parent: str, output: str | Path, executable: str) -> dict[str, object]:

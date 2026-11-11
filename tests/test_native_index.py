@@ -5,7 +5,7 @@ import pytest
 
 from hal_multisynteny.extract import ExtractionError, NativeSegmentExtractor
 from hal_multisynteny.models import NodeBlock
-from hal_multisynteny.native_index import build_index, index_path, query_index
+from hal_multisynteny.native_index import build_index, index_path, query_index, validate_index
 
 
 def _tool(tmp_path, rows, exit_code=0):
@@ -23,6 +23,7 @@ def test_native_index_queries_both_coordinate_frames_and_identity(tmp_path):
     output = tmp_path / "edge.sqlite"
     result = build_index(hal, "child", "parent", output, tool)
     assert result["segments"] == 2 and result["complete"] == "1"
+    validate_index(output, hal, "child", "parent", tool, result["hal_sha256"])
     assert next(query_index(output, child_chrom="chr1", child_start=5, child_end=25))[1:3] == (0, 10)
     assert next(query_index(output, parent_chrom="anc", parent_start=205, parent_end=220))[4:6] == (200, 210)
 
@@ -36,6 +37,16 @@ def test_interrupted_native_index_is_not_finalized(tmp_path):
         build_index(hal, "child", "parent", output, tool)
     assert not output.exists()
     assert not output.with_suffix(".tmp").exists()
+
+
+def test_index_validation_rejects_wrong_parent(tmp_path):
+    hal = tmp_path / "x.hal"
+    hal.write_bytes(b"controlled-hal")
+    tool = _tool(tmp_path, ["chr1\t0\t10\tanc\t100\t110\t+"])
+    output = tmp_path / "edge.sqlite"
+    result = build_index(hal, "child", "parent", output, tool)
+    with pytest.raises(ExtractionError, match="metadata mismatch for parent"):
+        validate_index(output, hal, "child", "wrong-parent", tool, result["hal_sha256"])
 
 
 @pytest.mark.hal

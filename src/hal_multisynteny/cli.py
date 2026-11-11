@@ -258,6 +258,7 @@ def _run_tree(args: argparse.Namespace) -> int:
             region_chrom=args.region_chrom,
             region_start=args.region_start,
             region_end=args.region_end,
+            region_node=args.region_node,
         ),
     )
     print("dry-run plan written" if args.dry_run else "tree run complete")
@@ -448,6 +449,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--region-chrom", help="bounded parent-region chromosome")
     run.add_argument("--region-start", type=int, help="bounded parent-region start")
     run.add_argument("--region-end", type=int, help="bounded parent-region end")
+    run.add_argument("--region-node", help="bounded-region ancestor node (currently the guide-tree root)")
     run.set_defaults(func=_run_tree)
 
     downward = subparsers.add_parser("refine-downward", help="refine stored common-refinement checkpoints without HAL")

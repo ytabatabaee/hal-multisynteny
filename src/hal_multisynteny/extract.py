@@ -478,11 +478,13 @@ class NativeSegmentExtractor:
     def _segment_rows(self, child_hal_genome: str, parent_hal_genome: str):
         """Stream one direct HAL edge, reusing a complete disk-backed cache."""
         if self.native_index_dir is not None:
-            from .native_index import index_path, query_index
+            from .native_index import index_path, query_index, validate_index
             indexed = index_path(self.native_index_dir, self.hal_path, child_hal_genome,
-                                 parent_hal_genome, self.executable)
+                                 parent_hal_genome, self.executable, self.hal_checksum)
             if not indexed.exists():
                 raise ExtractionError(f"native segment index is missing: {indexed}")
+            validate_index(indexed, self.hal_path, child_hal_genome, parent_hal_genome,
+                          self.executable, self.hal_checksum)
             query = {}
             if self.parent_region is not None:
                 query = {"parent_chrom": self.parent_region[0], "parent_start": self.parent_region[1],

@@ -65,6 +65,10 @@ Palaeognathae native-vs-halSynteny comparison would violate the region-selection
 and evidence requirements.
 
 The runner now accepts `--native-index-dir`, `--region-chrom`,
-`--region-start`, and `--region-end`; these options are validated and exercised
-on controlled indexed fixtures. They deliberately require a complete validated
-index and therefore do not bypass the blocker above.
+`--region-start`, `--region-end`, and `--region-node`; these options are
+validated and exercised on controlled indexed fixtures. The current bounded
+runner safely supports a selected guide-tree root (the two-leaf Anc3 pilot
+shape) and rejects deeper non-root targets rather than reusing root coordinates
+incorrectly. Full multi-level region propagation remains a follow-up extension.
+The options require a complete validated index and therefore do not bypass the
+blocker above.

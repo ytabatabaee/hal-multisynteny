@@ -94,6 +94,7 @@ class RunTreeConfig:
     region_chrom: str | None = None
     region_start: int | None = None
     region_end: int | None = None
+    region_node: str | None = None
 
     def __post_init__(self):
         if self.reconciliation_policy not in {"common-refinement", "segment-chaining"}:
@@ -139,6 +140,8 @@ def run_tree(
     else:
         plan = build_traversal_plan(tree_path, node_map_path)
     output = Path(output_dir)
+    if config.region_chrom is not None and config.region_node not in {None, plan.root.node_id}:
+        raise CheckpointError("bounded native regions currently require the selected node to be the guide-tree root")
     nodes_dir = output / "nodes"
     if config.dry_run:
         extractor = None
