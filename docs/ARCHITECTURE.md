@@ -324,14 +324,16 @@ one chain. Standalone orientation/order conflicts retain their existing rules;
 complex classifications propagate ambiguity. No chain resolves old duplication.
 
 `merge_decision` rejects a change of chain membership on either child side with
-`synteny_chain_boundary`. Same-chain components can merge only with zero parent
-gap, exact directional source adjacency, consistent orientation, and all existing
-continuity checks satisfied. A gap is rejected with `synteny_component_gap`,
-regardless of permissive general thresholds. Filtered atoms still stop the scan
-from bridging; chain boundaries crossed through filtered evidence are also
-reported. Explicit runtime checks reject a retained merged group that crosses
-chains on the same child side. Existing conflict/barrier checks remain active.
-The general greedy grouping algorithm and default thresholds are unchanged.
+`synteny_chain_boundary`. Strict segment chaining retains the historical exact
+zero-gap continuation rule. Opt-in gap-tolerant chaining (`gap_tolerant=True`,
+or the CLI `--gap-tolerant`) permits non-negative parent gaps up to
+`max_merge_gap` and child gaps up to `max_child_gap`, while retaining consistent
+orientation, chromosome, copy, descendant-boundary, ambiguity, and filtered-atom
+barriers. A merged block stores separate `ReconciledOccurrence` rows for its
+aligned components; its parent span may include unsupported gaps, but no mapping
+is interpolated across them. Filtered atoms and explicit chain boundaries remain
+hard barriers. The general greedy grouping algorithm and strict defaults are
+unchanged.
 
 ### Execution, checkpoints, and statistics
 

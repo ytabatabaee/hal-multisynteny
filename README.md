@@ -208,6 +208,12 @@ membership. The filtered atom remains in `atomic_intervals.tsv` with
 Adjacent retained atoms merge only when the chromosome, classification, child evidence,
 orientation, copy relationship, and descendant projections are compatible.
 Exact membership can merge across a gap no larger than `--max-merge-gap`.
+For opt-in gap-tolerant segment chaining, add `--gap-tolerant` and set
+`--max-merge-gap` (parent-coordinate gap) plus `--max-child-gap`
+(child-coordinate gap). This relaxes only the zero-gap continuation test;
+orientation, chromosome, copy, ambiguity, descendant-boundary, and filtered-atom
+barriers remain active. Gaps remain unsupported intervals inside the block span
+and are retained as separate component evidence, never fabricated mappings.
 `--boundary-tolerance` additionally permits a short boundary atom to join a
 neighbor when each descendant track has a unique, directly adjacent, monotonic
 continuation. It cannot cross a classification, orientation, order, copy, or

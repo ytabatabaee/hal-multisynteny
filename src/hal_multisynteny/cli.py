@@ -113,6 +113,8 @@ def _reconcile(args: argparse.Namespace) -> int:
         min_block_length=args.min_block_length,
         boundary_tolerance=args.boundary_tolerance,
         max_merge_gap=args.max_merge_gap,
+        max_child_gap=args.max_child_gap,
+        gap_tolerant=args.gap_tolerant,
         copy_id_scope=args.copy_id_scope,
         guide_tree_id=args.guide_tree_id,
     )
@@ -165,6 +167,8 @@ def _reconcile(args: argparse.Namespace) -> int:
                 "min_block_length": args.min_block_length,
                 "boundary_tolerance": args.boundary_tolerance,
                 "max_merge_gap": args.max_merge_gap,
+                "max_child_gap": args.max_child_gap,
+                "gap_tolerant": args.gap_tolerant,
                 "copy_id_scope": args.copy_id_scope,
             },
             "input_checksums": {
@@ -241,6 +245,8 @@ def _run_tree(args: argparse.Namespace) -> int:
             min_block_length=args.min_block_length,
             boundary_tolerance=args.boundary_tolerance,
             max_merge_gap=args.max_merge_gap,
+            max_child_gap=args.max_child_gap,
+            gap_tolerant=args.gap_tolerant,
             copy_id_scope=args.copy_id_scope,
             resume=args.resume,
             force_node=args.force_node,
@@ -397,6 +403,9 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile.add_argument("--min-block-length", type=int, default=50)
     reconcile.add_argument("--boundary-tolerance", type=int, default=1)
     reconcile.add_argument("--max-merge-gap", type=int, default=0)
+    reconcile.add_argument("--max-child-gap", type=int, default=0)
+    reconcile.add_argument("--gap-tolerant", action="store_true",
+                           help="allow bounded unaligned gaps between collinear segments")
     reconcile.add_argument("--copy-id-scope", choices=("local", "global"), default="local")
     reconcile.add_argument("--guide-tree-id")
     reconcile.set_defaults(func=_reconcile)
@@ -431,6 +440,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--min-block-length", type=int, default=50)
     run.add_argument("--boundary-tolerance", type=int, default=1)
     run.add_argument("--max-merge-gap", type=int, default=0)
+    run.add_argument("--max-child-gap", type=int, default=0)
+    run.add_argument("--gap-tolerant", action="store_true",
+                     help="allow bounded unaligned gaps between collinear segments")
     run.add_argument("--copy-id-scope", choices=("local", "global"), default="local")
     run.add_argument("--resume", action="store_true")
     run.add_argument("--force-node")

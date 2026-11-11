@@ -95,6 +95,8 @@ class RunTreeConfig:
     region_start: int | None = None
     region_end: int | None = None
     region_node: str | None = None
+    max_child_gap: int = 0
+    gap_tolerant: bool = False
 
     def __post_init__(self):
         if self.reconciliation_policy not in {"common-refinement", "segment-chaining"}:
@@ -209,6 +211,8 @@ def run_tree(
                 min_block_length=config.min_block_length,
                 boundary_tolerance=config.boundary_tolerance,
                 max_merge_gap=config.max_merge_gap,
+                max_child_gap=config.max_child_gap,
+                gap_tolerant=config.gap_tolerant,
                 copy_id_scope=config.copy_id_scope,
                 preserve_atomic_boundaries=config.reconciliation_policy != "segment-chaining",
                 segment_chaining=config.reconciliation_policy == "segment-chaining",
@@ -878,6 +882,8 @@ def _parameters(config: RunTreeConfig, plan: TraversalPlan, identity: dict[str, 
         "min_block_length": config.min_block_length,
         "boundary_tolerance": config.boundary_tolerance,
         "max_merge_gap": config.max_merge_gap,
+        "max_child_gap": config.max_child_gap,
+        "gap_tolerant": config.gap_tolerant,
         "copy_id_scope": config.copy_id_scope,
         "leaf_init": config.leaf_init,
         "hal_synteny_min_block_size": config.hal_synteny_min_block_size,

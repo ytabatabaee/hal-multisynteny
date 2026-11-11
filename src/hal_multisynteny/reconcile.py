@@ -42,6 +42,8 @@ class ReconcileConfig:
     copy_id_scope: str = "local"
     preserve_atomic_boundaries: bool = False
     segment_chaining: bool = False
+    max_child_gap: int = 0
+    gap_tolerant: bool = False
 
     def __post_init__(self) -> None:
         if self.min_block_length < 1:
@@ -50,6 +52,8 @@ class ReconcileConfig:
             raise ValueError("boundary_tolerance must be non-negative")
         if self.max_merge_gap < 0:
             raise ValueError("max_merge_gap must be non-negative")
+        if self.max_child_gap < 0:
+            raise ValueError("max_child_gap must be non-negative")
         if self.copy_id_scope not in COPY_ID_SCOPES:
             raise ValueError(f"copy_id_scope must be one of {list(COPY_ID_SCOPES)}")
 
@@ -521,7 +525,8 @@ def merge_decision(
         if chain_before or chain_after:
             if chain_before != chain_after:
                 reasons.append("synteny_chain_boundary")
-            # Even within a chain, no relaxed threshold may bridge a gap.
+            # Existing overlay chains are exact evidence components, not
+            # inferred synteny chains; never bridge their internal gaps.
             elif gap != 0 or any(
                 (first.end != second.start if first.strand == "+" else second.end != first.start)
                 for first in before for second in after
@@ -564,9 +569,14 @@ def merge_decision(
             second = after_by_key[record_key]
             if first == second:
                 continue
-            if first.strand == "+" and first.end != second.start:
+            child_gap = (second.start - first.end if first.strand == "+"
+                         else first.start - second.end)
+            if child_gap < 0:
                 return False
-            if first.strand == "-" and second.end != first.start:
+            if config.gap_tolerant:
+                if gap < 0 or gap > config.max_merge_gap or child_gap > config.max_child_gap:
+                    return False
+            elif child_gap != 0:
                 return False
         return True
 

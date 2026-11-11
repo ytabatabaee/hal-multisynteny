@@ -41,6 +41,62 @@ def test_long_gap_is_a_chaining_barrier():
     assert result.merge_decisions[0].rejection_reasons == ("parent_gap_exceeds_threshold",)
 
 
+def test_gap_tolerant_policy_merges_short_gaps_without_fabricating_components():
+    left = [_run("a", 0, 10, 0, 10), _run("b", 20, 30, 20, 30)]
+    right = [_run("c", 0, 10, 0, 10, child="right"), _run("d", 30, 40, 20, 30, child="right")]
+    result = reconcile_node(
+        left, right, parent_node="parent", left_node="left", right_node="right",
+        config=ReconcileConfig(
+            min_block_length=1, segment_chaining=True, gap_tolerant=True,
+            max_merge_gap=10, max_child_gap=20,
+        ),
+    )
+    assert len(result.blocks) == 1
+    assert result.merge_decisions[0].can_merge
+    # One occurrence per aligned component: the parent span includes the
+    # unsupported gap, but no component is fabricated across it.
+    assert [(row.anc_start, row.anc_end) for row in result.occurrences] == [
+        (0, 10), (20, 30), (0, 10), (20, 30)
+    ]
+
+
+def test_gap_tolerant_policy_rejects_child_gap_over_threshold():
+    left = [_run("a", 0, 10, 0, 10), _run("b", 30, 40, 20, 30)]
+    right = [_run("c", 0, 10, 0, 10, child="right"), _run("d", 30, 40, 20, 30, child="right")]
+    result = reconcile_node(
+        left, right, parent_node="parent", left_node="left", right_node="right",
+        config=ReconcileConfig(
+            min_block_length=1, segment_chaining=True, gap_tolerant=True,
+            max_merge_gap=10, max_child_gap=5,
+        ),
+    )
+    assert len(result.blocks) == 2
+    assert "non_collinear_forward" in result.merge_decisions[0].rejection_reasons
+
+
+def test_gap_tolerant_reverse_continuation_uses_reverse_child_gap():
+    left = [
+        ParentMappedRun("left", "a", "a.o", "left", "chrQ", 90, 100, "parent", "chrP", 0, 10,
+                        "-", "1", "unique", "a"),
+        ParentMappedRun("left", "b", "b.o", "left", "chrQ", 60, 70, "parent", "chrP", 20, 30,
+                        "-", "1", "unique", "b"),
+    ]
+    right = [
+        ParentMappedRun("right", "c", "c.o", "right", "chrQ", 90, 100, "parent", "chrP", 0, 10,
+                        "-", "1", "unique", "c"),
+        ParentMappedRun("right", "d", "d.o", "right", "chrQ", 60, 70, "parent", "chrP", 20, 30,
+                        "-", "1", "unique", "d"),
+    ]
+    result = reconcile_node(
+        left, right, parent_node="parent", left_node="left", right_node="right",
+        config=ReconcileConfig(
+            min_block_length=1, segment_chaining=True, gap_tolerant=True,
+            max_merge_gap=10, max_child_gap=25,
+        ),
+    )
+    assert len(result.blocks) == 1
+
+
 def test_native_alternative_geometry_remains_ambiguous_and_unmerged():
     extractor = _native_stub((
         ("chrQ", 0, 20, "chrP", 0, 20, "+", 1),

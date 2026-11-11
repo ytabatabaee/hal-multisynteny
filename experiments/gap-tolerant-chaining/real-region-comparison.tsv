@@ -1,0 +1,5 @@
+policy	parent_gap_bp	child_gap_bp	atomic_intervals	final_blocks	accepted_joins	median_bp	mean_bp	max_bp	block_span_bp	aligned_bp	aligned_span_ratio	gap_joins	wall_seconds
+strict	0	0	4109	3371	738	8	29.6701	1417	100018	100018	1.0000	0	125.54
+gap-tolerant	100	100	4109	3082	1027	8	32.4523	6947	100018	100018	1.0000	289	117.40
+gap-tolerant	1000	1000	4109	3078	1031	8	32.4945	8747	100018	100018	1.0000	293	117.18
+gap-tolerant	10000	10000	4109	3074	1035	8	32.5368	8747	100018	100018	1.0000	297	121.51

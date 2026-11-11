@@ -158,3 +158,20 @@ Because this `halSynteny` invocation has no region restriction, the remaining
 blocker is a bounded Method 1 leaf-initialisation path (or precomputed valid
 leaf checkpoints) on the same fixed region. The exact commands and traceback
 context are in `experiments/palaeognathae-native-comparison/REPORT.md`.
+
+## 2026-11-11 — opt-in gap-tolerant native chaining
+
+Added a selectable gap-tolerant continuation rule for Method 3. Strict
+segment-chaining remains the default. With `--gap-tolerant`,
+`--max-merge-gap` bounds the parent gap and `--max-child-gap` bounds the child
+gap; all chromosome, orientation, order, copy, ambiguity, inherited-boundary,
+filtered-atom, and tree-aware barriers remain active. Gapped blocks retain
+separate exact aligned components and never fabricate mappings through the
+unsupported gap.
+
+On `PalaeognathaeAnc3refChr301:0-100000`, strict chaining produced 3,371
+blocks (median 8 bp); thresholds 100/1,000/10,000 reduced this to 3,082/3,078/
+3,074 blocks with 289/293/297 gap joins. Downward interval and covered-length
+conservation remained exact in every run. These are engineering observations,
+not genome-wide biological conclusions. Full details and commands are in
+`experiments/gap-tolerant-chaining/REPORT.md`.
