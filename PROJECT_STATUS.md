@@ -123,3 +123,9 @@ same HAL with halSynteny initialization provides a common-refinement control and
 has matching Root coordinates but no accepted segment merges. This does not
 validate native paralogy; copy identity remains unresolved by the HAL CLI.
 Details are in `experiments/native-chaining-validation/REPORT.md`.
+
+Gap and duplication regressions now make the remaining semantics explicit:
+current segment chaining rejects even a short non-adjacent gap because exact
+child adjacency is required, while repeated native target geometries remain
+ambiguous with unresolved copy identity. Gap-tolerant chaining and native
+paralogy extraction are not yet implemented.

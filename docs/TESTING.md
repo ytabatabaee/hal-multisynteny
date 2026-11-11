@@ -43,6 +43,12 @@ and chromosome barriers, inherited tree-specific barriers, and downward
 conservation. Independent ground truth is stored in
 `tests/fixtures/native_chaining_hal/expected-results.json`.
 
+Gap/duplication regressions in `tests/test_native_gap_duplication.py` record
+that the current policy rejects both short and long non-adjacent segments
+(`non_collinear_forward` or `parent_gap_exceeds_threshold`) and preserves
+multiple native target geometries as ambiguous unresolved alternatives. It does
+not claim gap-tolerant chaining or native paralogy resolution.
+
 Run the complete local integration smoke:
 
 ```bash

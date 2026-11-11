@@ -1,0 +1,58 @@
+# Bounded Palaeognathae native-vs-halSynteny comparison
+
+Status: **blocked before reconstruction**. No Palaeognathae traversal output is
+claimed by this report.
+
+## Candidate subtree
+
+The smallest verified sibling subtree remains:
+
+```text
+(GCF_036417845.1, GCF_036370855.1)PalaeognathaeAnc3;
+```
+
+The HAL is `data/cache/palaeognathae/PalaeognathaeAnc0.hal` (7,470,552,826
+bytes; SHA-256
+`33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831`). The
+direct parent for both leaves is `PalaeognathaeAnc3`; the guide tree and node
+map are the committed files in `experiments/downward-pilot/`.
+
+## Selection attempt and blocker
+
+The required fixed regions must be selected from direct native child→Anc3
+evidence, not from the earlier arbitrary pilot intervals. The exact commands
+attempted were:
+
+```bash
+env PATH="$PWD/.hal-env/bin:$PATH" \
+  halAlignedExtract data/cache/palaeognathae/PalaeognathaeAnc0.hal \
+  GCF_036417845.1 --viewParentCoords > /tmp/pal-native-select/left.tsv
+
+env PATH="$PWD/.hal-env/bin:$PATH" \
+  halAlignedExtract data/cache/palaeognathae/PalaeognathaeAnc0.hal \
+  GCF_036370855.1 --viewParentCoords > /tmp/pal-native-select/right.tsv
+```
+
+`halAlignedExtract v2.2` exposes no chromosome or coordinate restriction. The
+first complete direct edge produced approximately 595 MB of text (about 8.3
+million rows). The second exceeded 2 GB while still scanning the complete HAL
+edge and was interrupted. A bounded streaming summary attempt likewise could
+not finish in the available execution window; no region was selected from
+partial output. No native or halSynteny reconstruction was run, and no
+arbitrary intervals were reused.
+
+This is a precise tooling blocker: the current native backend is streaming and
+disk-cached, but its source CLI still requires a complete child-edge scan before
+the requested region can be isolated. Selecting a genuinely homologous,
+reproducible region therefore requires a new bounded preprocessing/indexing
+stage (or a HAL API exposing region-restricted aligned segments).
+
+## Required next step
+
+Implement a resumable disk-backed native segment index that scans each required
+direct edge once, records chromosome/parent-coordinate offsets, and supports
+region queries without loading the edge into RAM. Then select fixed overlapping
+Anc3 intervals for both leaves, run Method 3 and Method 1 on identical regions,
+and compare their compact checkpoints. Until that stage exists, any claimed
+Palaeognathae native-vs-halSynteny comparison would violate the region-selection
+and evidence requirements.

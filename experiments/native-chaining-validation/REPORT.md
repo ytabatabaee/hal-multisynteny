@@ -92,6 +92,11 @@ merging, inversion/translocation barriers, tree-specific inherited barriers,
 and downward conservation. It does not validate native HAL paralogy: the CLI
 does not expose copy identity, and the fixture therefore leaves duplication
 relationships unresolved. Short/long unaligned-gap and explicit duplication
-fixtures should be added before interpreting biological copy relationships.
+fixtures should be added before interpreting biological copy relationships. The
+regression tests now make the current gap policy explicit: even a 5-bp gap is
+not bridged because `side_is_collinear` requires exact child adjacency; the
+intervening span remains outside aligned-base coverage. Long gaps are rejected
+as well. Gap-tolerant chaining is therefore a separate future extension, not a
+claim of the current method.
 The next experiment is a bounded Palaeognathae subtree comparison only after
 these controlled outputs are reviewed.
