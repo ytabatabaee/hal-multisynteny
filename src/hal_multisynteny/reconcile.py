@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -653,32 +654,41 @@ def _mapping_quality(records: Iterable[ParentMappedRun]) -> str:
     return "unique"
 
 
-def _relationship(record: ParentMappedRun, group: list[_Atom], atoms: list[_Atom]) -> str:
+def _relationship(
+    record: ParentMappedRun,
+    group: list[_Atom],
+    atoms: list[_Atom],
+    precomputed: tuple[int, int, frozenset[str], int, int] | None = None,
+) -> str:
     if record.status in {"duplicated", "ambiguous", "unaligned"}:
         return record.status
 
     record_length = record.parent_end - record.parent_start
-    filtered_coverage = sum(
-        atom.end - atom.start
-        for atom in atoms
-        if not atom.retained and (record in atom.left or record in atom.right)
-    )
-    retained_atoms = [
-        atom for atom in atoms if atom.retained and (record in atom.left or record in atom.right)
-    ]
-    retained_coverage = sum(atom.end - atom.start for atom in retained_atoms)
-    retained_blocks = {atom.block_id for atom in retained_atoms if atom.block_id}
-    group_coverage = sum(
-        atom.end - atom.start
-        for atom in group
-        if record in atom.left or record in atom.right
-    )
+    if precomputed is None:
+        filtered_coverage = sum(
+            atom.end - atom.start
+            for atom in atoms
+            if not atom.retained and (record in atom.left or record in atom.right)
+        )
+        retained_atoms = [
+            atom for atom in atoms if atom.retained and (record in atom.left or record in atom.right)
+        ]
+        retained_coverage = sum(atom.end - atom.start for atom in retained_atoms)
+        retained_blocks = {atom.block_id for atom in retained_atoms if atom.block_id}
+        group_coverage = sum(
+            atom.end - atom.start
+            for atom in group
+            if record in atom.left or record in atom.right
+        )
+        group_count = sum(record in atom.left or record in atom.right for atom in group)
+    else:
+        filtered_coverage, retained_coverage, retained_blocks, group_coverage, group_count = precomputed
 
     if filtered_coverage:
         return "filtered_partial"
     if len(retained_blocks) > 1:
         return "split_partial" if retained_coverage < record_length else "split"
-    if len(group) > 1 and sum(record in atom.left or record in atom.right for atom in group) > 1:
+    if len(group) > 1 and group_count > 1:
         return "merged"
     if group_coverage < record_length:
         return "split_partial"
@@ -690,7 +700,7 @@ def _project_occurrences(
     block_start: int,
     block_end: int,
     records: tuple[ParentMappedRun, ...],
-    left_runs: list[ParentMappedRun],
+    left_runs: set[ParentMappedRun],
     parent_node: str,
     parent_chrom: str,
 ) -> list[ReconciledOccurrence]:
@@ -821,10 +831,12 @@ def reconcile_node(
     left_node: str,
     right_node: str,
     config: ReconcileConfig | None = None,
+    profile: dict[str, float] | None = None,
 ) -> ReconcileResult:
     """Reconcile two child systems already mapped into one common parent."""
     config = config or ReconcileConfig()
     all_runs = left_runs + right_runs
+    left_run_set = set(left_runs)
     if any(run.parent_node != parent_node for run in all_runs):
         found = sorted({run.parent_node for run in all_runs})
         raise ValueError(f"all runs must use requested parent node {parent_node!r}; found {found}")
@@ -845,16 +857,20 @@ def reconcile_node(
     for run in right_runs:
         by_chrom[run.parent_chrom]["right"].append(run)
     atoms: list[_Atom] = []
+    stage_start = time.perf_counter()
     for chrom in sorted(by_chrom):
         sides = by_chrom[chrom]
         atoms.extend(
             _sweep_chromosome(chrom, sides["left"], sides["right"], config, order_conflicts)
         )
+    if profile is not None:
+        profile["atomic_sweep_and_classification"] += time.perf_counter() - stage_start
 
     groups: list[list[_Atom]] = []
     decisions: list[MergeDecision] = []
     hit_barrier = False
     filtered_chains: set[tuple[str, str]] = set()
+    stage_start = time.perf_counter()
     for atom in atoms:
         if not atom.retained:
             hit_barrier = True
@@ -883,7 +899,10 @@ def reconcile_node(
             groups.append([atom])
         hit_barrier = False
         filtered_chains.clear()
+    if profile is not None:
+        profile["chaining_decisions"] += time.perf_counter() - stage_start
 
+    stage_start = time.perf_counter()
     blocks: list[ParentBlock] = []
     occurrences: list[ReconciledOccurrence] = []
     provenance: list[ProvenanceRecord] = []
@@ -892,24 +911,49 @@ def reconcile_node(
         for atom in group:
             atom.block_id = block_id
 
+    # Build relationship aggregates once from record/atom incidences.  The
+    # previous implementation rescanned every atom for every provenance row,
+    # which became quadratic for large indexed regions.
+    relationship_stats: dict[ParentMappedRun, list[object]] = {}
+    for atom in atoms:
+        atom_length = atom.end - atom.start
+        for record in atom.left + atom.right:
+            stats = relationship_stats.setdefault(record, [0, 0, set(), 0, 0])
+            if atom.retained:
+                stats[1] += atom_length
+                if atom.block_id:
+                    stats[2].add(atom.block_id)
+            else:
+                stats[0] += atom_length
+    for group in groups:
+        group_coverage: dict[ParentMappedRun, list[int]] = {}
+        for atom in group:
+            atom_length = atom.end - atom.start
+            for record in atom.left + atom.right:
+                values = group_coverage.setdefault(record, [0, 0])
+                values[0] += atom_length
+                values[1] += 1
+        for record, (coverage, count) in group_coverage.items():
+            stats = relationship_stats[record]
+            stats[3] = coverage
+            stats[4] = count
+
     for index, group in enumerate(groups, start=1):
         block_id = f"HMSP{index:08d}"
         records = tuple(
             sorted({record for atom in group for record in atom.left + atom.right}, key=_record_sort_key)
         )
         _validate_barrier_group(group, records)
-        occurrences.extend(
-            _project_occurrences(
-                block_id,
-                group[0].start,
-                group[-1].end,
-                records,
-                left_runs,
-                parent_node,
-                group[0].chrom,
-            )
+        block_occurrences = _project_occurrences(
+            block_id,
+            group[0].start,
+            group[-1].end,
+            records,
+            left_run_set,
+            parent_node,
+            group[0].chrom,
         )
-        block_occurrences = [occurrence for occurrence in occurrences if occurrence.block_id == block_id]
+        occurrences.extend(block_occurrences)
         blocks.append(
             ParentBlock(
                 block_id,
@@ -928,7 +972,8 @@ def reconcile_node(
             )
         )
         for record in records:
-            side = "left" if record in left_runs else "right"
+            side = "left" if record in left_run_set else "right"
+            stats = relationship_stats[record]
             provenance.append(
                 ProvenanceRecord(
                     block_id,
@@ -937,13 +982,21 @@ def reconcile_node(
                     record.child_block_id,
                     record.child_occurrence_id,
                     record.source_anchor_id,
-                    _relationship(record, group, atoms),
+                    _relationship(record, group, atoms, (
+                        stats[0], stats[1], frozenset(stats[2]), stats[3], stats[4]
+                    )),
                 )
             )
 
     atomic_rows: list[AtomicInterval] = []
+    blocks_by_id = {block.block_id: block for block in blocks}
+    decision_by_start = {
+        (decision.parent_chrom, decision.right_start):
+            (decision.accepted_reason if decision.can_merge else "not_merged")
+        for decision in decisions
+    }
     for index, atom in enumerate(atoms, start=1):
-        merged = bool(atom.block_id and next(b for b in blocks if b.block_id == atom.block_id).atomic_interval_count > 1)
+        merged = bool(atom.block_id and blocks_by_id[atom.block_id].atomic_interval_count > 1)
         atomic_rows.append(
             AtomicInterval(
                 f"ATOM{index:08d}",
@@ -965,8 +1018,7 @@ def reconcile_node(
                 if not atom.retained
                 else "identical evidence; collinear monotonic projections"
                 if merged
-                else next((d.accepted_reason if d.can_merge else "not_merged"
-                           for d in decisions if d.right_start == atom.start), "not_merged"),
+                else decision_by_start.get((atom.chrom, atom.start), "not_merged"),
                 atom.block_id,
             )
         )
@@ -996,11 +1048,9 @@ def reconcile_node(
         for atom in atoms
         if atom.classification in explanations
     )
-    split_records = sum(
-        1
-        for record in all_runs
-        if sum(record in atom.left or record in atom.right for atom in atoms if atom.retained) > 1
-    )
+    split_records = sum(1 for record in all_runs if len(relationship_stats[record][2]) > 1)
+    if profile is not None:
+        profile["occurrence_projection_and_provenance"] += time.perf_counter() - stage_start
     warnings = (
         (
             "boundary tolerance is used only when evaluating near-boundary compatibility; "

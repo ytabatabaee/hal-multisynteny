@@ -55,6 +55,11 @@ translocations, and gapped opposite-orientation continuation. Native HAL tests
 also verify the direct `halAlignedExtract --viewParentCoords` strand and
 coordinate interpretation.
 
+Scalability runs can enable low-overhead stage profiling with
+`run-tree --profile --profile-output profile.json`. The profile records stage
+wall times and macOS peak RSS; benchmark tables and completed 10-Mb results are
+in `experiments/scalability-10mb/`.
+
 `tests/test_native_index.py` covers child- and parent-coordinate overlap
 queries, identity metadata, and interrupted-build cleanup. The index builder is
 streaming and disk-backed; generated SQLite stores are temporary experiment

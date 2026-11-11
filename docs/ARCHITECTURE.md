@@ -344,6 +344,16 @@ within one track and transitions between neighboring atoms remain barriers via
 This prevents a conserved inverted region from being mislabeled as an
 unresolved conflict while retaining genuine rearrangement boundaries.
 
+The scalability path uses indexed direct edges and optional stage profiling.
+Relationship/provenance accounting is incidence-based rather than a repeated
+atom scan; leaf propagation is indexed by child block/chromosome; leaf overlap
+validation and atomic decision provenance use monotone/dictionary lookups. The
+current downward representation still materializes descendant leaf occurrences
+at every internal node, which is the dominant memory cost at 10-Mb scale.
+VGP-scale execution should replace that duplication with compact ancestry links
+and deferred leaf-coordinate composition, while preserving exact component
+provenance and overlap-aware partition boundaries.
+
 ### Execution, checkpoints, and statistics
 
 For n leaves, a fresh full traversal computes 2n−2 direct halSynteny edges and

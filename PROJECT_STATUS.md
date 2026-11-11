@@ -194,3 +194,20 @@ Revised gap-tolerant runs produced 1,025 blocks at 100-bp gaps and 1,014 at
 interrupted after 367.64 s in relationship accounting before checkpoint output;
 this is recorded as a scaling blocker in
 `experiments/orientation-aware-chaining/REPORT.md`.
+
+## 2026-11-11 — VGP-scale optimization and completed 10-Mb benchmark
+
+Removed several observed quadratic scans without changing reconstruction
+semantics: relationship/provenance aggregates are computed once per
+record/atom incidence; block occurrences and merge-decision reasons use direct
+lookups; leaf propagation is indexed by child block/chromosome; and native leaf
+overlap validation uses a per-chromosome running maximum end. Optional
+`run-tree --profile --profile-output` records stage wall times and peak RSS.
+
+The optimized 1-Mb runs completed in 167.95 s strict and 147.20 s gap-tolerant
+(1-kb thresholds). The full 10-Mb strict and gap-tolerant runs also completed:
+968.22 s / 9.68 GB RSS and 734.26 s / 9.62 GB RSS, respectively, with downward
+covered-length and interval-union conservation true for Anc3 and both leaves.
+The 10-Mb target of 120 s and 4 GB RSS was not met. Downward refinement and
+checkpoint serialization dominate at this scale. Detailed tables and the VGP
+architecture assessment are in `experiments/scalability-10mb/REPORT.md`.

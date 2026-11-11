@@ -1,0 +1,6 @@
+run	interval	policy	native_segments	atomic_intervals	final_blocks	median_bp	max_bp	accepted_merges	wall_seconds	cpu_seconds	segments_per_wall_second	peak_rss_bytes	conserved_downward
+100k_strict	0-100000	strict	6673	4109	1553	22	1417	2556	110.30	38.21	60.5	194981888	true
+1m_strict	0-1000000	strict	83551	48199	18396	18	2908	29803	167.95	107.97	497.5	2193141760	true
+1m_gap1k	0-1000000	gap-tolerant-1000	83551	48199	12941	14	8886	35258	147.20	96.49	567.6	1856593920	true
+10m_strict	0-10000000	strict	673271	365420	109323	24	8376	256097	968.22	677.54	695.3	9678385152	true
+10m_gap1k	0-10000000	gap-tolerant-1000	673271	365420	84009	16	90830	281411	734.26	586.49	916.9	9622351872	true

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform
+import resource
 import shutil
+import subprocess
+import time
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
@@ -97,6 +101,8 @@ class RunTreeConfig:
     region_node: str | None = None
     max_child_gap: int = 0
     gap_tolerant: bool = False
+    profile: bool = False
+    profile_output: str | None = None
 
     def __post_init__(self):
         if self.reconciliation_policy not in {"common-refinement", "segment-chaining"}:
@@ -132,7 +138,11 @@ def run_tree(
     output_dir: str | Path,
     config: RunTreeConfig,
 ) -> dict[str, object]:
+    profile_started = time.perf_counter()
+    profile_stages: dict[str, float] = defaultdict(float)
+    profile_peak_rss = lambda: _peak_rss_bytes()
     hal_info: dict[str, object] | None = None
+    stage_start = time.perf_counter()
     if is_hal_backend(config.backend) and not config.dry_run:
         provisional_plan = build_traversal_plan(tree_path, node_map_path)
         required = sorted(set(provisional_plan.node_to_hal.values()))
@@ -141,6 +151,7 @@ def run_tree(
         plan = build_traversal_plan(tree_path, node_map_path, hal_info["parent_map"])
     else:
         plan = build_traversal_plan(tree_path, node_map_path)
+    profile_stages["hal_index_initialization_and_validation"] += time.perf_counter() - stage_start
     output = Path(output_dir)
     if config.region_chrom is not None and config.region_node not in {None, plan.root.node_id}:
         raise CheckpointError("bounded native regions currently require the selected node to be the guide-tree root")
@@ -167,7 +178,9 @@ def run_tree(
         _write_json_atomic(output / "dry-run-plan.json", plan_payload)
         return plan_payload
 
+    stage_start = time.perf_counter()
     _init_leaf_packages_from_plan(plan, leaf_blocks, output, config.resume, identity, config, extractor)
+    profile_stages["leaf_block_construction"] += time.perf_counter() - stage_start
     packages = {
         node_id: load_package(nodes_dir / node_id, node_id, plan.node_to_hal[node_id])
         for node_id in plan.node_to_hal
@@ -191,6 +204,7 @@ def run_tree(
             packages[step.node_id] = load_package(node_path, step.node_id, step.hal_genome)
             reused.append(step.node_id)
             continue
+        stage_start = time.perf_counter()
         left_result = _extract_child_edge(
             extractor, left_package, step.left_child, step.node_id, step.left_hal_genome,
             step.hal_genome, left_package.blocks
@@ -199,8 +213,10 @@ def run_tree(
             extractor, right_package, step.right_child, step.node_id, step.right_hal_genome,
             step.hal_genome, right_package.blocks
         )
+        profile_stages["native_edge_extraction"] += time.perf_counter() - stage_start
         left_runs = [run.to_parent_mapped_run() for run in left_result.runs]
         right_runs = [run.to_parent_mapped_run() for run in right_result.runs]
+        stage_start = time.perf_counter()
         result = reconcile_node(
             left_runs,
             right_runs,
@@ -218,7 +234,9 @@ def run_tree(
                 segment_chaining=config.reconciliation_policy == "segment-chaining",
                 guide_tree_id=plan.tree_sha256,
             ),
+            profile=profile_stages if config.profile else None,
         )
+        profile_stages["reconciliation_total"] += time.perf_counter() - stage_start
         node_blocks = tuple(
             NodeBlock(
                 block.block_id,
@@ -245,9 +263,11 @@ def run_tree(
             )
             for occurrence in result.occurrences
         )
+        stage_start = time.perf_counter()
         leaf_occurrences = tuple(
             _propagate_leaf_occurrences(result.occurrences, left_package, right_package)
         )
+        profile_stages["leaf_occurrence_propagation"] += time.perf_counter() - stage_start
         manifest = _manifest(
             step,
             plan,
@@ -269,6 +289,7 @@ def run_tree(
             for side, extraction in (("left", left_result), ("right", right_result))
         }
         _update_node_statistics(result, left_package, right_package, left_result, right_result, leaf_occurrences)
+        stage_start = time.perf_counter()
         _write_internal_checkpoint(
             node_path,
             node_blocks,
@@ -284,6 +305,7 @@ def run_tree(
             tuple((f"{side}_{name}", content) for side, extraction in (("left", left_result), ("right", right_result))
                   for name, content in extraction.artifacts),
         )
+        profile_stages["checkpoint_serialization"] += time.perf_counter() - stage_start
         packages[step.node_id] = load_package(node_path, step.node_id, step.hal_genome)
         recomputed.append(step.node_id)
     _write_json_atomic(
@@ -300,9 +322,36 @@ def run_tree(
     _write_tree_statistics(output, plan)
     if config.downward_refinement:
         from .downward import refine_tree
+        stage_start = time.perf_counter()
         refine_tree(tree_path=tree_path, node_map_path=node_map_path, output_dir=output,
                     resume=config.resume and not config.force_node)
+        profile_stages["downward_refinement"] += time.perf_counter() - stage_start
+    if config.profile:
+        profile = {
+            "version": "1",
+            "wall_seconds": time.perf_counter() - profile_started,
+            "stages_seconds": dict(sorted(profile_stages.items())),
+            "peak_rss_bytes": profile_peak_rss(),
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "git_commit": _git_commit(),
+        }
+        profile_path = Path(config.profile_output) if config.profile_output else output / "profile.json"
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_atomic(profile_path, profile)
     return plan_payload
+
+
+def _peak_rss_bytes() -> int:
+    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return int(value if platform.system() == "Darwin" else value * 1024)
+
+
+def _git_commit() -> str:
+    try:
+        return subprocess.check_output(("git", "rev-parse", "HEAD"), text=True).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
 
 
 def load_package(path: str | Path, node_id: str, hal_genome: str) -> NodePackage:
@@ -373,16 +422,16 @@ def _init_leaf_packages_from_plan(
         blocks: list[NodeBlock] = []
         node_occurrences: list[NodeBlockOccurrence] = []
         leaf_occurrences: list[LeafOccurrence] = []
-        seen: list[tuple[str, int, int]] = []
+        max_end_by_chrom: dict[str, int] = {}
         for index, row in enumerate(sorted(by_leaf[leaf], key=lambda r: (r["chrom"], int(r["start"]), r["block_id"])), start=1):
             if sorted(row) != sorted(LEAF_SEED_FIELDS):
                 raise CheckpointError("invalid leaf seed row")
             start = int(row["start"])
             end = int(row["end"])
-            interval = (row["chrom"], start, end)
-            if any(chrom == interval[0] and start < other_end and end > other_start for chrom, other_start, other_end in seen):
+            previous_max_end = max_end_by_chrom.get(row["chrom"])
+            if previous_max_end is not None and start < previous_max_end:
                 raise CheckpointError(f"overlapping seed blocks for leaf {leaf!r}")
-            seen.append(interval)
+            max_end_by_chrom[row["chrom"]] = max(previous_max_end or 0, end)
             block_id = row["block_id"]
             blocks.append(NodeBlock(block_id, leaf, row["chrom"], start, end, "leaf_seed", row["status"]))
             node_occurrences.append(
@@ -628,15 +677,17 @@ def _propagate_leaf_occurrences(
     right_package: NodePackage,
 ) -> list[LeafOccurrence]:
     by_package = {"left": left_package, "right": right_package}
+    occurrence_lookup = {
+        side: _index_leaf_occurrences(package.leaf_occurrences)
+        for side, package in by_package.items()
+    }
     output: list[LeafOccurrence] = []
     counters: dict[str, int] = defaultdict(int)
     for occurrence in sorted(reconciled, key=lambda row: (row.block_id, row.child_side, row.child_block_id, row.anc_start)):
-        child_package = by_package[occurrence.child_side]
-        for leaf_occurrence in child_package.leaf_occurrences:
-            if leaf_occurrence.block_id != occurrence.child_block_id:
-                continue
-            if leaf_occurrence.node_chrom != occurrence.chrom:
-                continue
+        candidates = occurrence_lookup[occurrence.child_side].get(
+            (occurrence.child_block_id, occurrence.chrom), ()
+        )
+        for leaf_occurrence in candidates:
             overlap_start = max(leaf_occurrence.node_start, occurrence.start)
             overlap_end = min(leaf_occurrence.node_end, occurrence.end)
             if overlap_end <= overlap_start:
@@ -684,6 +735,19 @@ def _propagate_leaf_occurrences(
                 output[-1].node_end,
             )
     return output
+
+
+def _index_leaf_occurrences(occurrences: tuple[LeafOccurrence, ...]):
+    """Index descendant occurrences by child block and node chromosome."""
+    indexed: dict[tuple[str, str], list[LeafOccurrence]] = defaultdict(list)
+    for occurrence in occurrences:
+        indexed[(occurrence.block_id, occurrence.node_chrom)].append(occurrence)
+    return {
+        key: tuple(sorted(rows, key=lambda row: (
+            row.node_start, row.node_end, row.leaf, row.occurrence_id,
+        )))
+        for key, rows in indexed.items()
+    }
 
 
 def _project_leaf(occurrence: LeafOccurrence, node_start: int, node_end: int) -> LeafOccurrence:

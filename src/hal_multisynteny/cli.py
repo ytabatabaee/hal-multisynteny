@@ -247,6 +247,8 @@ def _run_tree(args: argparse.Namespace) -> int:
             max_merge_gap=args.max_merge_gap,
             max_child_gap=args.max_child_gap,
             gap_tolerant=args.gap_tolerant,
+            profile=args.profile,
+            profile_output=args.profile_output,
             copy_id_scope=args.copy_id_scope,
             resume=args.resume,
             force_node=args.force_node,
@@ -443,6 +445,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--max-child-gap", type=int, default=0)
     run.add_argument("--gap-tolerant", action="store_true",
                      help="allow bounded unaligned gaps between collinear segments")
+    run.add_argument("--profile", action="store_true", help="write stage timing and peak RSS profile")
+    run.add_argument("--profile-output", help="profile JSON path (default: <output-dir>/profile.json)")
     run.add_argument("--copy-id-scope", choices=("local", "global"), default="local")
     run.add_argument("--resume", action="store_true")
     run.add_argument("--force-node")
