@@ -121,3 +121,9 @@ other clade and its leaves, both orientations, chromosome changes, known copies,
 ambiguous overlapping projections, unmapped gaps, exact conservation,
 recomputation/resume determinism and stale/corrupt checkpoints. No full-clade
 biological reconstruction or halSynteny execution is part of this milestone.
+
+The controlled native-chaining fixture additionally verifies that a final block
+formed from multiple HAL segments remains one block in downward checkpoints.
+Leaf occurrences are clipped in child coordinates and then transformed through
+the occurrence's actual ancestor interval; this preserves length when a merged
+ancestor block contains several fine-grained descendant pieces.

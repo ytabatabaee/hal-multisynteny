@@ -1,0 +1,14 @@
+{
+  "status": "independent_ground_truth",
+  "regions": [
+    {"name": "conserved_collinear", "root": [0, 40], "orientation": "+", "leaves": ["A", "B", "C", "D"]},
+    {"name": "inversion_in_A", "root": [40, 60], "orientation": "A:-;B:+;C:+;D:+"},
+    {"name": "translocation_in_D", "root": [60, 80], "orientation": "+", "D_chromosome": "chrD2"},
+    {"name": "long_gap", "root": [80, 100], "aligned_bases": 0}
+  ],
+  "copy_identity": "unresolved_for_native_hal_cli",
+  "notes": [
+    "Ground truth is specified from the source MAF event design, never generated from hal-multisynteny output.",
+    "The duplication case is represented only as an unresolved mapping fixture; native HAL CLI does not expose orthology/paralogy labels."
+  ]
+}

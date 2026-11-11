@@ -413,3 +413,9 @@ the corresponding edge reuse one cached segment stream. The stream is persisted
 as an atomic, identity-keyed TSV cache and consumed lazily; a centered interval
 tree performs the child-block join without a per-segment scan from the beginning
 of the chromosome.
+
+Native internal-edge records also retain the child block classification as an
+inherited barrier reason. This allows the root reconciliation to use both child
+subtrees while conservatively preventing a chain from crossing a rearrangement
+boundary established in one descendant clade; it is not a weighted support
+score.

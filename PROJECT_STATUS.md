@@ -105,3 +105,21 @@ The hardened tiny-HAL benchmark is recorded in
 invocations and 10 extracted segment rows, and resumed execution reused all
 cache entries. The pilot still has no accepted root merges, so larger-block
 biological validation remains outstanding.
+
+## 2026-11-10 — controlled native chaining validation
+
+Added `tests/fixtures/native_chaining_hal/`, a reproducible real HAL built from
+committed MAFs with four leaves, a conserved multi-segment region, an A-lineage
+inversion, and a D `chrD2` translocation. Independent expected relationships
+are recorded in `expected-results.json`. The native run produced an actual
+Anc1 merge (4 atomic intervals to 3 blocks), chained Anc2 to 2 blocks while
+respecting the chromosome barrier, and retained three Root blocks at exact
+coordinates 0–40, 40–60, and 60–80. Downward refinement completed with length
+and interval conservation for all leaves.
+
+Inherited descendant-classification barriers from Anc1 make the Root decision
+use both child subtrees and reject joins across its 40–60 rearrangement. The
+same HAL with halSynteny initialization provides a common-refinement control and
+has matching Root coordinates but no accepted segment merges. This does not
+validate native paralogy; copy identity remains unresolved by the HAL CLI.
+Details are in `experiments/native-chaining-validation/REPORT.md`.

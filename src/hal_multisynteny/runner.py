@@ -625,6 +625,12 @@ def _propagate_leaf_occurrences(
             if overlap_end <= overlap_start:
                 continue
             projected = _project_leaf(leaf_occurrence, overlap_start, overlap_end)
+            if occurrence.strand == "+":
+                ancestor_start = occurrence.anc_start + (overlap_start - occurrence.start)
+                ancestor_end = occurrence.anc_start + (overlap_end - occurrence.start)
+            else:
+                ancestor_start = occurrence.anc_end - (overlap_end - occurrence.start)
+                ancestor_end = occurrence.anc_end - (overlap_start - occurrence.start)
             counters[occurrence.block_id] += 1
             output.append(
                 LeafOccurrence(
@@ -640,8 +646,8 @@ def _propagate_leaf_occurrences(
                     projected.source,
                     occurrence.ancestor,
                     occurrence.anc_chrom,
-                    occurrence.anc_start,
-                    occurrence.anc_end,
+                    ancestor_start,
+                    ancestor_end,
                 )
             )
             output[-1] = LeafOccurrence(

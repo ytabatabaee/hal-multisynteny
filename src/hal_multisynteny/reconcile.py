@@ -572,6 +572,13 @@ def merge_decision(
 
     if previous.classification != current.classification:
         reasons.append("different_classification")
+    for side in ("left", "right"):
+        before = previous.left if side == "left" else previous.right
+        after = current.left if side == "left" else current.right
+        before_barriers = {record.inherited_barrier_reason for record in before if record.inherited_barrier_reason}
+        after_barriers = {record.inherited_barrier_reason for record in after if record.inherited_barrier_reason}
+        if (before_barriers or after_barriers) and before_barriers != after_barriers:
+            reasons.append("descendant_classification_boundary")
     same_membership = _membership(previous) == _membership(current)
     if config.segment_chaining:
         # Segment chaining relaxes only source block identity; collinearity,

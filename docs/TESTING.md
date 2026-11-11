@@ -36,6 +36,13 @@ reverse-strand projection, unsorted records, and boundary-only contacts. The
 native benchmark and cache/invocation measurements are recorded in
 `experiments/native-segments/REPORT.md`.
 
+The controlled four-leaf HAL fixture is generated from committed MAFs by
+`tests/fixtures/native_chaining_hal/build_native_chaining_hal.sh`. Its HAL test
+asserts exact Root/Anc1/Anc2 coordinates, a real multi-atomic merge, inversion
+and chromosome barriers, inherited tree-specific barriers, and downward
+conservation. Independent ground truth is stored in
+`tests/fixtures/native_chaining_hal/expected-results.json`.
+
 Run the complete local integration smoke:
 
 ```bash

@@ -552,10 +552,12 @@ class NativeSegmentExtractor:
                 else:
                     pstart, pend = parent_end - (end - child_start), parent_end - (start - child_start)
                 mapped.add(block.block_id)
+                inherited_reason = f"descendant_classification:{block.classification}" if block.classification else ""
                 runs.append(EdgeMappingRun(child_node_id, block.block_id, block.block_id + ".native", child_chrom, start, end,
                     parent_node_id, parent_chrom, pstart, pend, strand, "", "unique",
                     f"native:{child_hal_genome}:{line_number}:{start}-{end}", "halAlignedExtract", json.dumps(command),
-                    raw_mapping_outcome="native_unresolved_copy", component_id=f"native-segment:{line_number}"))
+                    raw_mapping_outcome="native_unresolved_copy", inherited_barrier_reason=inherited_reason,
+                    component_id=f"native-segment:{line_number}"))
         alternatives = defaultdict(set)
         for run in runs:
             alternatives[(run.child_block_id, run.child_node)].add((run.parent_chrom, run.parent_start, run.parent_end, run.strand))
