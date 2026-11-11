@@ -400,10 +400,9 @@ adjacent-atom merge machinery instead of preserving every atomic boundary.
 correspondence; merge decisions and rejected barriers retain their provenance.
 The legacy `common-refinement` policy remains the default.
 
-The `hal-native-segments` backend currently exposes a deterministic
-`EdgeMappingRun` segment-table interface (`--fake-mappings`) so the Python
-reconciler can be tested without pretending that halLiftover is native
-extraction. A bundled HAL C++ top/bottom-segment adapter is not yet available;
-no whole-genome substitute is invoked. Native extraction must preserve direct
-parent coordinates, orientation, alternatives, and unmapped evidence before it
-can be enabled for the large Palaeognathae HAL.
+The `hal-native-segments` backend uses native HAL's batched
+`halAlignedExtract --viewParentCoords` interface and emits the same
+`EdgeMappingRun` records as the fixture adapter. It preserves direct parent
+coordinates, orientation, and unmapped evidence without invoking halLiftover or
+halSynteny. The installed environment has no HAL C++ headers, so a standalone
+C++ helper is unnecessary; the CLI is the reproducible native boundary.

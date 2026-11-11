@@ -598,16 +598,16 @@ experimental policy can chain compatible adjacent atoms:
 ```bash
 hal-multisynteny run-tree --backend hal-native-segments --leaf-init native \
   --hal alignment.hal \
-  --fake-mappings segments.tsv --tree tree.nwk --node-map node-map.tsv \
-  --leaf-blocks leaf-blocks --output-dir native-tree-run \
+  --tree tree.nwk --node-map node-map.tsv --output-dir native-tree-run \
   --reconciliation-policy segment-chaining --downward-refinement
 ```
 
-`hal-native-segments` consumes an explicit `EdgeMappingRun` segment table and
-preserves orientation, alternatives, copy IDs, and provenance. A native HAL
-C++ top/bottom-segment extractor is not bundled yet; the adapter therefore
-fails clearly without `--fake-mappings` rather than substituting a costly
-whole-genome halLiftover run. Atomic intervals remain in checkpoints and each
+`hal-native-segments` uses the installed native `halAlignedExtract
+--viewParentCoords` utility in one batched process per edge and automatically
+initializes leaf homology units; an explicit `EdgeMappingRun` table remains
+available for deterministic tests. It preserves
+orientation, alternatives, copy IDs, and provenance without invoking
+halLiftover or halSynteny. Atomic intervals remain in checkpoints and each
 records its final parent block ID. This is an experimental engineering path,
 not a biological accuracy claim.
 

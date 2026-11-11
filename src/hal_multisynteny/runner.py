@@ -318,14 +318,24 @@ def _init_leaf_packages_from_plan(
                                          max_anchor_distance=config.hal_synteny_max_anchor_distance)
         _init_halsynteny_leaf_packages(plan, output_dir, identity, config, initializer, resume)
         return
-    if leaf_blocks is None:
-        raise CheckpointError("--leaf-blocks is required with --leaf-init supplied/native; native HAL leaf extraction is unavailable")
-    source = Path(leaf_blocks)
-    rows = read_leaf_seed_blocks(source / "leaf_blocks.tsv")
     by_leaf: dict[str, list[dict[str, str]]] = defaultdict(list)
-    for row in rows:
-        by_leaf[row["leaf"]].append(row)
     leaves = {node_id for node_id, hal in plan.node_to_hal.items() if not any(step.node_id == node_id for step in plan.steps)}
+    if config.leaf_init == "native":
+        if not config.hal:
+            raise CheckpointError("--hal is required with --leaf-init native")
+        native = NativeSegmentExtractor(config.hal)
+        for leaf in sorted(leaves):
+            for block in native.leaf_blocks(plan.node_to_hal[leaf]):
+                by_leaf[leaf].append({"leaf": leaf, "block_id": block.block_id, "chrom": block.chrom,
+                    "start": str(block.start), "end": str(block.end), "strand": "+", "copy_id": "1",
+                    "status": "unique", "source": "halAlignedExtract-native-segment"})
+    else:
+        if leaf_blocks is None:
+            raise CheckpointError("--leaf-blocks is required with --leaf-init supplied")
+        source = Path(leaf_blocks)
+        rows = read_leaf_seed_blocks(source / "leaf_blocks.tsv")
+        for row in rows:
+            by_leaf[row["leaf"]].append(row)
     for leaf in sorted(leaves):
         if leaf not in by_leaf:
             raise CheckpointError(f"leaf seed blocks missing records for {leaf!r}")
@@ -950,9 +960,11 @@ def _build_extractor(config: RunTreeConfig) -> EdgeExtractor:
             raise CheckpointError("--fake-mappings is required for the fake backend")
         return FakeEdgeExtractor(config.fake_mappings)
     if config.backend == "hal-native-segments":
-        if not config.fake_mappings:
-            raise CheckpointError("--fake-mappings is required for the current native-segment fixture interface; native HAL C++ extraction is unavailable")
-        return NativeSegmentExtractor(config.fake_mappings)
+        if config.fake_mappings:
+            return NativeSegmentExtractor(config.fake_mappings)
+        if not config.hal:
+            raise CheckpointError("--hal is required for hal-native-segments when --fake-mappings is absent")
+        return NativeSegmentExtractor(config.hal)
     if is_hal_backend(config.backend):
         if not config.hal:
             raise CheckpointError("--hal is required for the HAL backend")

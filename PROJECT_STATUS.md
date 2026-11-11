@@ -67,9 +67,21 @@ support barriers remain enforced. `AtomicInterval.final_parent_block_id`
 preserves atom-to-final-block correspondence, and the legacy
 `common-refinement` policy remains the default.
 
-The `hal-native-segments` backend and `--leaf-init native` interface are now
-available for deterministic `EdgeMappingRun` segment tables. A batched HAL
-native C++ extractor is not bundled because HAL development headers/bindings
-are unavailable here; the backend requires `--fake-mappings` and does not
-silently invoke halLiftover. This is an explicit blocker, not native biological
-validation. Existing backend outputs are unchanged.
+The `hal-native-segments` backend and `--leaf-init native` now run directly on
+the tiny real HAL through native `halAlignedExtract --viewParentCoords`, with
+one batched process per direct edge and no halSynteny, leaf-block, or mapping
+table input required. The environment lacks HAL C++ headers, but the installed
+native CLI provides the needed segment stream; no standalone helper is needed.
+The same backend accepts an explicit segment table for deterministic tests.
+Existing backend outputs are unchanged; this remains experimental biological
+validation.
+
+On the four-leaf tiny HAL, the complete native run (automatic leaf
+initialization, bottom-up reconciliation, and downward refinement) completed
+in 1.35 s wall / 0.83 s user / 0.38 s system; the root contained 4 atomic and
+4 final blocks with 40 supported bases. Peak-memory reporting was unavailable
+because macOS `time -l` could not query `kern.clockrate`.
+
+Final validation with `.hal-env/bin` on `PATH`: 266 tests passed and 1 warning;
+Ruff passed. The existing portable-evidence regression also passed. Package
+build remains network-blocked while isolated Hatchling dependencies are fetched.

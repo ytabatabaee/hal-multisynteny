@@ -400,20 +400,93 @@ class FakeEdgeExtractor:
         return tuple(records)
 
 
-class NativeSegmentExtractor(FakeEdgeExtractor):
-    """Deterministic native-segment interface backed by a serialized segment table.
+class NativeSegmentExtractor:
+    """Batched native HAL segment extractor using ``halAlignedExtract``.
 
-    The table uses the existing ``EdgeMappingRun`` schema, preserving exact
-    child/parent coordinates, strand, status, copy and provenance. A future
-    HAL C++ adapter can implement the same ``extract`` contract without
-    changing reconciliation. This avoids silently substituting halLiftover.
+    ``halAlignedExtract --viewParentCoords`` streams direct child/parent
+    aligned segments in one process per genome edge. The command is part of
+    the HAL distribution and does not invoke halLiftover or halSynteny. An
+    explicit EdgeMappingRun TSV may still be supplied for deterministic tests.
     """
 
+    def __init__(self, source: str | Path):
+        self.source = Path(source)
+        self.mapping_path = self.source if self.source.suffix != ".hal" else None
+        self.hal_path = self.source if self.source.suffix == ".hal" else None
+        self.executable = shutil.which("halAlignedExtract")
+        if self.hal_path and not self.hal_path.is_file():
+            raise ExtractionError(f"HAL file does not exist: {self.hal_path}")
+        if self.hal_path and not self.executable:
+            raise ExtractionError("missing HAL tool: halAlignedExtract is not on PATH")
+        self._fixture = FakeEdgeExtractor(self.mapping_path) if self.mapping_path else None
+
     def extract(self, child_node_id, parent_node_id, child_hal_genome, parent_hal_genome, child_blocks):
-        result = super().extract(child_node_id, parent_node_id, child_hal_genome, parent_hal_genome, child_blocks)
-        return EdgeExtractionResult(result.runs, result.unmapped, "hal-native-segments", {"native-segments": "fixture-table"}, result.commands,
-                                    ("native HAL C++ extraction is not bundled; using explicit segment table",), result.artifacts,
-                                    result.block_states, result.edge_statistics)
+        if self._fixture is not None:
+            result = self._fixture.extract(child_node_id, parent_node_id, child_hal_genome, parent_hal_genome, child_blocks)
+            return EdgeExtractionResult(result.runs, result.unmapped, "hal-native-segments", {"native-segments": "fixture-table"}, result.commands, ("fixture segment table",))
+        command = (self.executable, str(self.hal_path), child_hal_genome, "--viewParentCoords")
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        if completed.returncode:
+            raise ExtractionError(f"halAlignedExtract failed with exit {completed.returncode}: {completed.stderr.strip()}")
+        blocks = tuple(child_blocks)
+        runs = []
+        mapped = set()
+        for line_number, line in enumerate(completed.stdout.splitlines(), 1):
+            if not line.strip():
+                continue
+            fields = line.split("\t")
+            if len(fields) != 7:
+                raise ExtractionError(f"halAlignedExtract line {line_number}: expected 7 columns")
+            child_chrom, child_start, child_end, parent_chrom, parent_start, parent_end, strand = fields
+            try:
+                child_start, child_end, parent_start, parent_end = map(int, (child_start, child_end, parent_start, parent_end))
+            except ValueError as exc:
+                raise ExtractionError(f"halAlignedExtract line {line_number}: invalid coordinates") from exc
+            if not (0 <= child_start < child_end and 0 <= parent_start < parent_end and strand in {"+", "-"}):
+                raise ExtractionError(f"halAlignedExtract line {line_number}: invalid segment")
+            for block in blocks:
+                if block.chrom != child_chrom or block.end <= child_start or block.start >= child_end:
+                    continue
+                start, end = max(block.start, child_start), min(block.end, child_end)
+                if end <= start:
+                    continue
+                if strand == "+":
+                    pstart, pend = parent_start + start - child_start, parent_start + end - child_start
+                else:
+                    pstart, pend = parent_end - (end - child_start), parent_end - (start - child_start)
+                mapped.add(block.block_id)
+                runs.append(EdgeMappingRun(child_node_id, block.block_id, block.block_id + ".native", child_chrom, start, end,
+                    parent_node_id, parent_chrom, pstart, pend, strand, "1", "unique",
+                    f"native:{child_hal_genome}:{line_number}:{start}-{end}", "halAlignedExtract", json.dumps(command)))
+        unmapped = tuple(UnmappedEdgeEvidence(child_node_id, parent_node_id, b.block_id, b.chrom, b.start, b.end,
+                         "unaligned", "native HAL segment stream has no overlap", f"native:{b.block_id}:unaligned", "halAlignedExtract", json.dumps(command))
+                         for b in blocks if b.block_id not in mapped)
+        return EdgeExtractionResult(tuple(runs), unmapped, "hal-native-segments", {"halAlignedExtract": "v2.2"}, (command,), ())
+
+    def leaf_blocks(self, child_hal_genome: str):
+        """Return fine-grained child intervals directly from HAL segment boundaries."""
+        if self.hal_path is None:
+            raise ExtractionError("automatic native leaf initialization requires a HAL file")
+        command = (self.executable, str(self.hal_path), child_hal_genome, "--viewParentCoords")
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        if completed.returncode:
+            raise ExtractionError(f"halAlignedExtract failed with exit {completed.returncode}: {completed.stderr.strip()}")
+        blocks = []
+        seen = set()
+        for line_number, line in enumerate(completed.stdout.splitlines(), 1):
+            if not line.strip():
+                continue
+            fields = line.split("\t")
+            if len(fields) != 7:
+                raise ExtractionError(f"halAlignedExtract line {line_number}: expected 7 columns")
+            chrom, start, end = fields[0], int(fields[1]), int(fields[2])
+            key = (chrom, start, end)
+            if key in seen:
+                continue
+            seen.add(key)
+            digest = hashlib.sha256(f"{child_hal_genome}:{chrom}:{start}:{end}".encode()).hexdigest()[:16]
+            blocks.append(NodeBlock(f"NSEG_{digest}", child_hal_genome, chrom, start, end, "native_segment", "unique"))
+        return tuple(sorted(blocks, key=lambda b: (b.chrom, b.start, b.end, b.block_id)))
 
 
 class HalEdgeExtractor:

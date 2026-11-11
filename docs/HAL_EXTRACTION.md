@@ -87,10 +87,11 @@ script to verify exact target intervals, strands, audit categories, propagated
 orientations, conflict classifications, and unmapped-evidence lifecycle.
 ## Native segment interface (experimental)
 
-The experimental `hal-native-segments` backend consumes a deterministic TSV
-using the existing `EdgeMappingRun` coordinate/status/provenance schema. It is
-intended as the serialization boundary for a future batched HAL C++
-top/bottom-segment adapter. The current repository does not bundle HAL C++
-development headers or a Python binding, so it refuses to claim native
-extraction and requires `--fake-mappings`. Missing intervals remain explicit
-unaligned evidence; multiple alternatives remain separate records.
+The experimental `hal-native-segments` backend uses the installed native
+`halAlignedExtract --viewParentCoords` utility in one batched process per
+direct child edge. It streams child/parent segment coordinates and strand into
+the existing `EdgeMappingRun` schema; missing intervals remain explicit
+unaligned evidence and multiple alternatives remain separate records. The
+environment contains the native executable but not HAL C++ development headers,
+so no standalone C++ helper is built or required. An explicit segment TSV is
+still supported for deterministic tests.
