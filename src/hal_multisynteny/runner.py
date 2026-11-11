@@ -90,10 +90,20 @@ class RunTreeConfig:
     hal: str | None = None
     downward_refinement: bool = False
     reconciliation_policy: str = "common-refinement"
+    native_index_dir: str | None = None
+    region_chrom: str | None = None
+    region_start: int | None = None
+    region_end: int | None = None
 
     def __post_init__(self):
         if self.reconciliation_policy not in {"common-refinement", "segment-chaining"}:
             raise ValueError("reconciliation_policy must be common-refinement or segment-chaining")
+        region = (self.region_chrom, self.region_start, self.region_end)
+        if any(value is not None for value in region) and not (
+            self.region_chrom and self.region_start is not None and self.region_end is not None and
+            0 <= self.region_start < self.region_end
+        ):
+            raise ValueError("region requires chrom, non-negative start, and end greater than start")
 
 
 def init_leaf_packages(
@@ -977,7 +987,10 @@ def _build_extractor(config: RunTreeConfig, cache_dir: str | Path | None = None)
             return NativeSegmentExtractor(config.fake_mappings)
         if not config.hal:
             raise CheckpointError("--hal is required for hal-native-segments when --fake-mappings is absent")
-        return NativeSegmentExtractor(config.hal, cache_dir)
+        region = None
+        if config.region_chrom is not None and config.region_start is not None and config.region_end is not None:
+            region = (config.region_chrom, config.region_start, config.region_end)
+        return NativeSegmentExtractor(config.hal, cache_dir, config.native_index_dir, region)
     if is_hal_backend(config.backend):
         if not config.hal:
             raise CheckpointError("--hal is required for the HAL backend")

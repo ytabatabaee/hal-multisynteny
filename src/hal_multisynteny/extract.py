@@ -449,7 +449,9 @@ class NativeSegmentExtractor:
     explicit EdgeMappingRun TSV may still be supplied for deterministic tests.
     """
 
-    def __init__(self, source: str | Path, cache_dir: str | Path | None = None):
+    def __init__(self, source: str | Path, cache_dir: str | Path | None = None,
+                 native_index_dir: str | Path | None = None,
+                 parent_region: tuple[str, int, int] | None = None):
         self.source = Path(source)
         self.mapping_path = self.source if self.source.suffix != ".hal" else None
         self.hal_path = self.source if self.source.suffix == ".hal" else None
@@ -460,6 +462,8 @@ class NativeSegmentExtractor:
             raise ExtractionError("missing HAL tool: halAlignedExtract is not on PATH")
         self._fixture = FakeEdgeExtractor(self.mapping_path) if self.mapping_path else None
         self.cache_dir = Path(cache_dir) if cache_dir is not None else None
+        self.native_index_dir = Path(native_index_dir) if native_index_dir is not None else None
+        self.parent_region = parent_region
         if self.cache_dir is not None:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.hal_checksum = sha256_file(self.hal_path) if self.hal_path else "fixture"
@@ -473,6 +477,22 @@ class NativeSegmentExtractor:
 
     def _segment_rows(self, child_hal_genome: str, parent_hal_genome: str):
         """Stream one direct HAL edge, reusing a complete disk-backed cache."""
+        if self.native_index_dir is not None:
+            from .native_index import index_path, query_index
+            indexed = index_path(self.native_index_dir, self.hal_path, child_hal_genome,
+                                 parent_hal_genome, self.executable)
+            if not indexed.exists():
+                raise ExtractionError(f"native segment index is missing: {indexed}")
+            query = {}
+            if self.parent_region is not None:
+                query = {"parent_chrom": self.parent_region[0], "parent_start": self.parent_region[1],
+                         "parent_end": self.parent_region[2]}
+            yield from query_index(indexed, **query)
+            return
+        def in_region(row):
+            return self.parent_region is None or (
+                row[3] == self.parent_region[0] and row[5] > self.parent_region[1] and row[4] < self.parent_region[2]
+            )
         cache_path = self._cache_path(child_hal_genome, parent_hal_genome) if self.cache_dir else None
         if cache_path and cache_path.exists():
             with cache_path.open(encoding="utf-8") as handle:
@@ -487,7 +507,9 @@ class NativeSegmentExtractor:
                         raise ExtractionError(f"native cache line {line_number}: invalid coordinates") from exc
                     if not (0 <= child_start < child_end and 0 <= parent_start < parent_end and fields[6] in {"+", "-"}):
                         raise ExtractionError(f"native cache line {line_number}: invalid segment")
-                    yield fields[0], child_start, child_end, fields[3], parent_start, parent_end, fields[6], line_origin
+                    row = (fields[0], child_start, child_end, fields[3], parent_start, parent_end, fields[6], line_origin)
+                    if in_region(row):
+                        yield row
             return
         if self.hal_path is None:
             raise ExtractionError("native segment rows require a HAL file")
@@ -514,7 +536,8 @@ class NativeSegmentExtractor:
                 row = (child_chrom, child_start, child_end, parent_chrom, parent_start, parent_end, strand, line_number)
                 if output:
                     output.write("\t".join(map(str, row)) + "\n")
-                yield row
+                if in_region(row):
+                    yield row
             complete = True
         finally:
             if output:

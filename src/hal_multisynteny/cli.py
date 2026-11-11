@@ -254,6 +254,10 @@ def _run_tree(args: argparse.Namespace) -> int:
             close_unmerged_threshold=args.close_unmerged_threshold,
             downward_refinement=args.downward_refinement,
             reconciliation_policy=args.reconciliation_policy,
+            native_index_dir=args.native_index_dir,
+            region_chrom=args.region_chrom,
+            region_start=args.region_start,
+            region_end=args.region_end,
         ),
     )
     print("dry-run plan written" if args.dry_run else "tree run complete")
@@ -440,6 +444,10 @@ def build_parser() -> argparse.ArgumentParser:
                      help="split descendants using stored runs after upward common refinement")
     run.add_argument("--reconciliation-policy", choices=("common-refinement", "segment-chaining"),
                      default="common-refinement", help="atomic preservation policy for upward reconciliation")
+    run.add_argument("--native-index-dir", help="validated SQLite native-segment index directory")
+    run.add_argument("--region-chrom", help="bounded parent-region chromosome")
+    run.add_argument("--region-start", type=int, help="bounded parent-region start")
+    run.add_argument("--region-end", type=int, help="bounded parent-region end")
     run.set_defaults(func=_run_tree)
 
     downward = subparsers.add_parser("refine-downward", help="refine stored common-refinement checkpoints without HAL")

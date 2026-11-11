@@ -38,8 +38,6 @@ def build_index(hal_path: str | Path, child: str, parent: str, output: str | Pat
             parent_chrom TEXT NOT NULL, parent_start INTEGER NOT NULL, parent_end INTEGER NOT NULL,
             strand TEXT NOT NULL, source_line INTEGER NOT NULL
         );
-        CREATE INDEX segments_child ON segments(child_chrom, child_start, child_end, id);
-        CREATE INDEX segments_parent ON segments(parent_chrom, parent_start, parent_end, id);
     """)
     process = subprocess.Popen((executable, str(hal_path), child, "--viewParentCoords"),
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -78,6 +76,10 @@ def build_index(hal_path: str | Path, child: str, parent: str, output: str | Pat
             temporary.unlink(missing_ok=True)
     if returncode:
         raise ExtractionError(f"halAlignedExtract failed with exit {returncode}: {stderr.strip()}")
+    conn.executescript("""
+        CREATE INDEX segments_child ON segments(child_chrom, child_start, child_end, id);
+        CREATE INDEX segments_parent ON segments(parent_chrom, parent_start, parent_end, id);
+    """)
     metadata = {"complete": "1", "hal_sha256": sha256_file(hal_path), "child": child,
                 "parent": parent, "tool_version": TOOL_VERSION, "segment_count": str(count),
                 "identity": index_identity(hal_path, child, parent, executable)}

@@ -47,6 +47,13 @@ the requested region can be isolated. Selecting a genuinely homologous,
 reproducible region therefore requires a new bounded preprocessing/indexing
 stage (or a HAL API exposing region-restricted aligned segments).
 
+The new SQLite index builder was then exercised directly on the first edge. The
+command ran for 204.35 seconds before being interrupted during the bulk insert;
+the temporary database had reached approximately 3.5 GB and was removed. No
+final index or segment count was recorded, so this remains an incomplete build,
+not usable evidence. Secondary indexes are now created only after bulk loading
+to reduce construction overhead on future attempts.
+
 ## Required next step
 
 Implement a resumable disk-backed native segment index that scans each required
@@ -56,3 +63,8 @@ Anc3 intervals for both leaves, run Method 3 and Method 1 on identical regions,
 and compare their compact checkpoints. Until that stage exists, any claimed
 Palaeognathae native-vs-halSynteny comparison would violate the region-selection
 and evidence requirements.
+
+The runner now accepts `--native-index-dir`, `--region-chrom`,
+`--region-start`, and `--region-end`; these options are validated and exercised
+on controlled indexed fixtures. They deliberately require a complete validated
+index and therefore do not bypass the blocker above.
