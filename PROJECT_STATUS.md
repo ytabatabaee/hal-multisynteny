@@ -265,3 +265,19 @@ figures are in `experiments/block-quality-comparison/`. Anura was not present
 locally, so no cross-clade run was attempted. The recommended next step is a
 bounded/precomputed halSynteny path, followed by controlled anchor-chaining
 evaluation; production reconciliation semantics remain unchanged.
+
+## 2026-11-11 — anchor-chaining validation
+
+Independent `halLiftover --outPSLWithName` checks matched 12/12 sampled native
+child components for exact parent/child coordinates and relative orientation.
+The 10-Mb anchor output contains 15,189 blocks below 10 bp and 32,391 below
+1 kb; 10,028 blocks span positive child gaps, which remain excluded from
+aligned-base counts. Remaining boundaries are dominated by repeated child
+chromosome/orientation transitions (34,639/34,628), while residual order
+barriers number 89 and unresolved duplication/complex barriers 618.
+
+The evidence does not justify a dense global DP over the current native stream:
+hard structural transitions dominate. The next specific improvement is indexed
+pre-atomic grouping of consecutive collinear native fragments, retaining all
+alternatives before evaluating a score-based DP. Details, validation coordinates,
+and figures are in `experiments/anchor-chaining-validation/`.

@@ -466,3 +466,10 @@ sets as overlapping evidence and assigns a separate deterministic primary
 reason only for accounting. `scripts/plot_fragmentation.py` renders native
 edge evidence, atomic classifications, blocks, and rejected boundaries without
 turning diagnostic PSL samples into traversal inputs.
+
+Anchor-chaining validation confirms that sampled native components agree with
+independent `halLiftover` coordinates. The remaining 10-Mb boundaries are
+dominated by child chromosome/orientation transitions and unresolved-copy
+evidence; these remain hard barriers. A future pre-atomic anchor-component
+index should precede any score-based dynamic programming so alternatives are
+reduced without inventing mappings or collapsing duplication paths.
