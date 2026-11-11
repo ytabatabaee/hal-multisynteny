@@ -666,6 +666,15 @@ future schema extension, not current behavior.
 
 ## Real-data liftover audit
 
+### halSynteny baseline
+
+The Method 1 baseline workflow, input manifest, exact blocker, and SLURM
+continuation command are documented in
+[`docs/HALSYNTENY_BASELINE.md`](docs/HALSYNTENY_BASELINE.md) and
+[`experiments/halsynteny-baseline/REPORT.md`](experiments/halsynteny-baseline/REPORT.md).
+No incomplete PSL is used as traversal input or reported as a multisynteny
+result.
+
 ### Bounded Palaeognathae traversal pilot
 
 The completed two-leaf upward/downward pilot is documented in

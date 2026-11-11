@@ -1,0 +1,13 @@
+{
+  "status": "blocked",
+  "hal": "data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+  "sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+  "hal_version": "2.2",
+  "target_parent": "PalaeognathaeAnc3",
+  "children": ["GCF_036417845.1", "GCF_036370855.1"],
+  "ancestor_windows": [100000, 1000000, 10000000],
+  "tool": ".hal-env/bin/halSynteny",
+  "complete_psl_outputs": false,
+  "blocker": "Complete pairwise halSynteny preprocessing did not finish locally; temporary PSL remained empty.",
+  "continuation": "sbatch experiments/halsynteny-baseline/slurm_halsynteny.sh"
+}

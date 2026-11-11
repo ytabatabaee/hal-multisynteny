@@ -281,3 +281,27 @@ hard structural transitions dominate. The next specific improvement is indexed
 pre-atomic grouping of consecutive collinear native fragments, retaining all
 alternatives before evaluating a score-based DP. Details, validation coordinates,
 and figures are in `experiments/anchor-chaining-validation/`.
+
+## 2026-11-11 — halSynteny baseline workflow and blocker
+
+Added a reproducible Method 1 baseline workflow for the two direct
+`PalaeognathaeAnc3` edges, with atomic PSL outputs, non-empty validation,
+Linux `/usr/bin/time -v` resource capture, interval summaries, and an SLURM
+24-hour continuation script. The input HAL checksum, children, target parent,
+and windows are recorded in `experiments/halsynteny-baseline/manifest.json`.
+
+The complete baseline did not finish locally. Earlier whole-edge and
+query-chromosome attempts ran for 313.53 s and 194.69 s before interruption;
+both had zero-byte or incomplete outputs. A later finite attempt likewise
+remained zero-byte and was stopped. No partial PSL is a valid baseline or
+traversal input. The exact continuation command is:
+
+```bash
+sbatch experiments/halsynteny-baseline/slurm_halsynteny.sh
+```
+
+Until both pairwise PSLs complete and are reconciled through the existing
+tree-aware pipeline, the native Method 3/anchor results must not be described
+as an end-to-end Method 1 comparison. Details are in
+`experiments/halsynteny-baseline/REPORT.md` and
+`docs/HALSYNTENY_BASELINE.md`.
