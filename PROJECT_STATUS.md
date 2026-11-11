@@ -137,3 +137,24 @@ deterministic overlap queries, and interrupted-build cleanup. The Palaeognathae
 comparison remains pending because building the two large direct-edge indexes
 is still an expensive one-time scan; no partial extraction is treated as
 complete evidence.
+
+## 2026-11-11 — first real Palaeognathae indexed pilot
+
+Both direct Anc3 indexes are now complete and fully validated: 44,800,497 and
+45,331,345 native rows (about 6.6 and 6.7 GiB), with the HAL checksum and
+validation timings recorded in `experiments/palaeognathae-native-comparison/`.
+The fixed homologous panel is recorded in `region-manifest.tsv`; the selected
+Anc3 interval is `PalaeognathaeAnc3refChr83:470-570`.
+
+The indexed native Method 3 run completed in 86.03 s and its split-only
+downward checkpoint passed conservation checks. It emitted 10 Anc3 blocks / 107
+covered bases: five `shared_consistent` and five `right_only`, with zero
+ambiguity, duplication, orientation, or order conflicts. This is an
+engineering pilot on two leaves, not a biological conclusion.
+
+The identical Method 1 command using `halSynteny` was attempted for 313.53 s
+and interrupted while initializing the first leaf; no checkpoint was produced.
+Because this `halSynteny` invocation has no region restriction, the remaining
+blocker is a bounded Method 1 leaf-initialisation path (or precomputed valid
+leaf checkpoints) on the same fixed region. The exact commands and traceback
+context are in `experiments/palaeognathae-native-comparison/REPORT.md`.

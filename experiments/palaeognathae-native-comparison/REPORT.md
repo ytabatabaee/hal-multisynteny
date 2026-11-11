@@ -1,74 +1,66 @@
-# Bounded Palaeognathae native-vs-halSynteny comparison
+# First real Palaeognathae Method 3 vs Method 1 comparison
 
-Status: **blocked before reconstruction**. No Palaeognathae traversal output is
-claimed by this report.
+Status: **Method 3 completed; Method 1 is resource-blocked before leaf initialisation completes.** No full-clade result is claimed.
 
-## Candidate subtree
+## Inputs and reproducibility
 
-The smallest verified sibling subtree remains:
+- HAL: `data/cache/palaeognathae/PalaeognathaeAnc0.hal`
+- HAL SHA-256: `33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831`
+- subtree: `(GCF_036417845.1,GCF_036370855.1)PalaeognathaeAnc3;`
+- guide tree/node map: `experiments/downward-pilot/tree.nwk` and `experiments/downward-pilot/node-map.tsv`
+- fixed evaluation region: `PalaeognathaeAnc3refChr83:470-570`
+- tool environment: local `.hal-env` HAL v2.2; no system packages changed
 
-```text
-(GCF_036417845.1, GCF_036370855.1)PalaeognathaeAnc3;
-```
+Both direct child→Anc3 SQLite indexes completed and passed full integrity, metadata, and row-count validation. Their compact metadata is in `index-stats.tsv`; the large databases remain outside Git in `/tmp/pal-indexes`. The five-region discovery panel and exact indexed counts are in `region-manifest.tsv`. The selected 100-bp region is a real homologous Anc3 interval: `halLiftover` maps it to both leaves (including the expected small coordinate differences).
 
-The HAL is `data/cache/palaeognathae/PalaeognathaeAnc0.hal` (7,470,552,826
-bytes; SHA-256
-`33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831`). The
-direct parent for both leaves is `PalaeognathaeAnc3`; the guide tree and node
-map are the committed files in `experiments/downward-pilot/`.
+## Commands
 
-## Selection attempt and blocker
-
-The required fixed regions must be selected from direct native child→Anc3
-evidence, not from the earlier arbitrary pilot intervals. The exact commands
-attempted were:
+Method 3 (completed, 86.03 s wall time):
 
 ```bash
-env PATH="$PWD/.hal-env/bin:$PATH" \
-  halAlignedExtract data/cache/palaeognathae/PalaeognathaeAnc0.hal \
-  GCF_036417845.1 --viewParentCoords > /tmp/pal-native-select/left.tsv
-
-env PATH="$PWD/.hal-env/bin:$PATH" \
-  halAlignedExtract data/cache/palaeognathae/PalaeognathaeAnc0.hal \
-  GCF_036370855.1 --viewParentCoords > /tmp/pal-native-select/right.tsv
+env PATH="$PWD/.hal-env/bin:$PATH" .venv/bin/hal-multisynteny run-tree \
+  --backend hal-native-segments --leaf-init native \
+  --hal data/cache/palaeognathae/PalaeognathaeAnc0.hal \
+  --native-index-dir /tmp/pal-indexes \
+  --tree experiments/downward-pilot/tree.nwk \
+  --node-map experiments/downward-pilot/node-map.tsv \
+  --output-dir /tmp/pal-m3-r470 --reconciliation-policy segment-chaining \
+  --min-block-length 1 --downward-refinement \
+  --region-node PalaeognathaeAnc3 --region-chrom PalaeognathaeAnc3refChr83 \
+  --region-start 470 --region-end 570
 ```
 
-`halAlignedExtract v2.2` exposes no chromosome or coordinate restriction. The
-first complete direct edge produced approximately 595 MB of text (about 8.3
-million rows). The second exceeded 2 GB while still scanning the complete HAL
-edge and was interrupted. A bounded streaming summary attempt likewise could
-not finish in the available execution window; no region was selected from
-partial output. No native or halSynteny reconstruction was run, and no
-arbitrary intervals were reused.
+Method 1 (attempted, interrupted after 313.53 s without producing a leaf checkpoint):
 
-This is a precise tooling blocker: the current native backend is streaming and
-disk-cached, but its source CLI still requires a complete child-edge scan before
-the requested region can be isolated. Selecting a genuinely homologous,
-reproducible region therefore requires a new bounded preprocessing/indexing
-stage (or a HAL API exposing region-restricted aligned segments).
+```bash
+env PATH="$PWD/.hal-env/bin:$PATH" .venv/bin/hal-multisynteny run-tree \
+  --backend hal --leaf-init halsynteny \
+  --hal data/cache/palaeognathae/PalaeognathaeAnc0.hal \
+  --tree experiments/downward-pilot/tree.nwk \
+  --node-map experiments/downward-pilot/node-map.tsv \
+  --output-dir /tmp/pal-m1-r470 --min-block-length 1 \
+  --downward-refinement --hal-synteny-min-block-size 1 \
+  --hal-synteny-max-anchor-distance 1000
+```
 
-The new SQLite index builder was then exercised directly on the first edge. The
-command ran for 204.35 seconds before being interrupted during the bulk insert;
-the temporary database had reached approximately 3.5 GB and was removed. No
-final index or segment count was recorded, so this remains an incomplete build,
-not usable evidence. Secondary indexes are now created only after bulk loading
-to reduce construction overhead on future attempts.
+The exact failure mode is a long-running `halSynteny` child inside `HalsyntenyLeafInitializer.initialize`; it was interrupted with Ctrl-C. `halSynteny` has no region restriction in this invocation, so the comparison cannot be made fairly on the fixed 100-bp panel without a bounded Method 1 preprocessing step. This is the remaining precise resource blocker.
 
-## Required next step
+## Method 3 result
 
-Implement a resumable disk-backed native segment index that scans each required
-direct edge once, records chromosome/parent-coordinate offsets, and supports
-region queries without loading the edge into RAM. Then select fixed overlapping
-Anc3 intervals for both leaves, run Method 3 and Method 1 on identical regions,
-and compare their compact checkpoints. Until that stage exists, any claimed
-Palaeognathae native-vs-halSynteny comparison would violate the region-selection
-and evidence requirements.
+Anc3 emitted 10 final blocks (107 covered bases), with 15 represented leaf occurrences. Classification counts were: 5 `shared_consistent`, 5 `right_only`, and zero for each of the other seven classes. There were no ambiguous, duplicated, unaligned, orientation-conflict, or order-conflict mappings. Downward refinement was lossless: Anc3 remained 10 blocks and both leaves conserved covered length and interval unions. The split fraction was 0/10 (0%). Size quantiles before and after refinement were identical: min 2, q05 2, median 7.5, q25 3, q75 14.25, q95 28.25, mean 10.7 bp.
 
-The runner now accepts `--native-index-dir`, `--region-chrom`,
-`--region-start`, `--region-end`, and `--region-node`; these options are
-validated and exercised on controlled indexed fixtures. The current bounded
-runner safely supports a selected guide-tree root (the two-leaf Anc3 pilot
-shape) and rejects deeper non-root targets rather than reusing root coordinates
-incorrectly. Full multi-level region propagation remains a follow-up extension.
-The options require a complete validated index and therefore do not bypass the
-blocker above.
+The output intentionally includes overlapping/flanking native segments 465–572 around the requested 470–570 window; these are evidence intervals, not claims that the evaluation boundary is biological.
+
+Concrete blocks from `/tmp/pal-m3-r470/nodes/PalaeognathaeAnc3/blocks.tsv`:
+
+- shared consistent: 474–494 and 509–544;
+- one-sided evidence: 465–472 (`right_only`);
+- boundary-propagation example: 544–556 and 556–564 remain separate blocks at the parent boundary and are propagated unchanged downward;
+- ambiguous target-overlap geometry: none observed in this bounded pilot;
+- orientation/order conflict: none observed (the zero counts are a result, not missing evidence).
+
+## Interpretation and limitations
+
+Algorithmic validation is successful: both 44.8M/45.3M-row indexes validated, the indexed native extractor queried the fixed panel, and the upward plus split-only downward checkpoints passed. The Method 3 observations are an engineering pilot on two leaves and one 100-bp window. They are not a biological conclusion about Palaeognathae, and the five random PSL audit captures remain diagnostic-only evidence. A valid Method 1 comparison still requires bounded `halSynteny` execution (or precomputed leaf checkpoints) on the same fixed region.
+
+See `PROJECT_STATUS.md` for the next step and exact validation commands.

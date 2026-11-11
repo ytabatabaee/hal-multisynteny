@@ -1,0 +1,6 @@
+chrom	start	end	left_segment_rows	left_covered_bp	right_segment_rows	right_covered_bp	selected
+PalaeognathaeAnc3refChr83	470	570	5	77	10	100	true
+PalaeognathaeAnc3refChr83	5000	5500	44	471	49	479	false
+PalaeognathaeAnc3refChr83	10000	10500	17	500	13	341	false
+PalaeognathaeAnc3refChr83	20000	20500	7	122	13	499	false
+PalaeognathaeAnc3refChr83	28000	28500	57	477	58	457	false

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import sqlite3
 import subprocess
@@ -47,9 +48,25 @@ def validate_index(path: str | Path, hal_path: str | Path, child: str, parent: s
         count = conn.execute("SELECT COUNT(*) FROM segments").fetchone()[0]
         if int(metadata.get("segment_count", -1)) != count:
             raise ExtractionError("native segment index row count does not match metadata")
+        Path(str(path) + ".validated.json").write_text(json.dumps({"size": Path(path).stat().st_size,
+            "mtime_ns": Path(path).stat().st_mtime_ns, "identity": expected}, sort_keys=True) + "\n")
         return metadata
     finally:
         conn.close()
+
+
+def lightweight_validate_index(path: str | Path, expected_identity: str) -> None:
+    """Check a previously full-validated index without scanning all rows."""
+    path = Path(path)
+    marker = Path(str(path) + ".validated.json")
+    if not marker.exists():
+        raise ExtractionError(f"native segment index has no full-validation marker: {path}")
+    try:
+        payload = json.loads(marker.read_text())
+    except (OSError, ValueError) as exc:
+        raise ExtractionError(f"invalid native segment validation marker: {marker}") from exc
+    if payload.get("identity") != expected_identity or payload.get("size") != path.stat().st_size or payload.get("mtime_ns") != path.stat().st_mtime_ns:
+        raise ExtractionError(f"native segment index validation marker is stale: {path}")
 
 
 def build_index(hal_path: str | Path, child: str, parent: str, output: str | Path, executable: str) -> dict[str, object]:
@@ -59,6 +76,12 @@ def build_index(hal_path: str | Path, child: str, parent: str, output: str | Pat
     temporary = output.with_suffix(".tmp")
     temporary.unlink(missing_ok=True)
     conn = sqlite3.connect(temporary)
+    conn.executescript("""
+        PRAGMA journal_mode=OFF;
+        PRAGMA synchronous=OFF;
+        PRAGMA temp_store=FILE;
+        PRAGMA locking_mode=EXCLUSIVE;
+    """)
     conn.executescript("""
         CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE segments (
