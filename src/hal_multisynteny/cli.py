@@ -472,7 +472,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--close-unmerged-threshold", type=int, default=1000)
     run.add_argument("--downward-refinement", action="store_true",
                      help="split descendants using stored runs after upward common refinement")
-    run.add_argument("--reconciliation-policy", choices=("common-refinement", "segment-chaining"),
+    run.add_argument("--reconciliation-policy", choices=("common-refinement", "segment-chaining", "anchor-chaining"),
                      default="common-refinement", help="atomic preservation policy for upward reconciliation")
     run.add_argument("--native-index-dir", help="validated SQLite native-segment index directory")
     run.add_argument("--region-chrom", help="bounded parent-region chromosome")

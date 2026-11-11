@@ -421,6 +421,14 @@ adjacent-atom merge machinery instead of preserving every atomic boundary.
 correspondence; merge decisions and rejected barriers retain their provenance.
 The legacy `common-refinement` policy remains the default.
 
+`--reconciliation-policy anchor-chaining` is an experimental tree-aware
+ordered-anchor mode. It uses both direct child tracks at each ancestral node,
+allows a child with missing evidence to remain unconstraining, and removes
+only soft inherited/classification boundaries when the supported tracks remain
+collinear. Structural and unresolved-copy barriers stay hard. This policy is
+not the default and does not alter the classification labels or descendant
+coordinate provenance.
+
 The `hal-native-segments` backend uses native HAL's batched
 `halAlignedExtract --viewParentCoords` interface and emits the same
 `EdgeMappingRun` records as the fixture adapter. It preserves direct parent

@@ -45,6 +45,7 @@ class ReconcileConfig:
     segment_chaining: bool = False
     max_child_gap: int = 0
     gap_tolerant: bool = False
+    anchor_chaining: bool = False
 
     def __post_init__(self) -> None:
         if self.min_block_length < 1:
@@ -496,7 +497,7 @@ def merge_decision(
     intervening_filtered: bool = False,
 ) -> MergeDecision:
     reasons: list[str] = []
-    if config.preserve_atomic_boundaries:
+    if config.preserve_atomic_boundaries and not config.anchor_chaining:
         reasons.append("common_refinement_boundary")
     gap = current.start - previous.end
     conflict_reasons = {
@@ -554,6 +555,15 @@ def merge_decision(
     def side_is_collinear(
         before: tuple[ParentMappedRun, ...], after: tuple[ParentMappedRun, ...]
     ) -> bool:
+        if config.anchor_chaining and (not before or not after):
+            # Missing evidence is not a deletion call. In anchor mode an
+            # absent side contributes no order constraint; the supported side,
+            # hard structural checks, and explicit gap limits still govern.
+            return True
+        if not before and not after:
+            return True
+        if not before or not after:
+            return False
         def key(record: ParentMappedRun) -> tuple[str, ...]:
             return (
                 record.species,
@@ -584,21 +594,23 @@ def merge_decision(
                 return False
         return True
 
-    if previous.classification != current.classification:
+    if previous.classification != current.classification and not config.anchor_chaining:
         reasons.append("different_classification")
     for side in ("left", "right"):
         before = previous.left if side == "left" else previous.right
         after = current.left if side == "left" else current.right
         before_barriers = {record.inherited_barrier_reason for record in before if record.inherited_barrier_reason}
         after_barriers = {record.inherited_barrier_reason for record in after if record.inherited_barrier_reason}
-        if (before_barriers or after_barriers) and before_barriers != after_barriers:
+        if (before_barriers or after_barriers) and before_barriers != after_barriers and not config.anchor_chaining:
             reasons.append("descendant_classification_boundary")
     same_membership = _membership(previous) == _membership(current)
-    if config.segment_chaining:
-        # Segment chaining relaxes only source block identity; collinearity,
-        # orientation, copy, status, and child support checks remain active.
+    if config.segment_chaining or config.anchor_chaining:
+        # Both opt-in policies relax source block identity. Anchor chaining
+        # additionally treats compatible inherited/classification changes as
+        # soft, while collinearity, orientation, copy, and status checks stay.
         same_membership = True
-    if not same_membership and min(previous.end - previous.start, current.end - current.start) > config.boundary_tolerance:
+    if (not same_membership and not config.anchor_chaining and
+            min(previous.end - previous.start, current.end - current.start) > config.boundary_tolerance):
         reasons.append("boundary_atom_exceeds_tolerance")
     previous_records = previous.left + previous.right
     current_records = current.left + current.right
@@ -623,8 +635,13 @@ def merge_decision(
     ok = not reasons and left_ok and right_ok
     if not ok and left_ok and right_ok and not reasons:
         reasons.append("different_child_support")
+    accepted_reason = ""
+    if ok:
+        accepted_reason = "merge_compatible"
+        if config.anchor_chaining:
+            accepted_reason = f"anchor_chain_compatible:score={current.end - previous.start - gap:.3f}"
     return MergeDecision(parent_node, previous.chrom, previous.start, previous.end, current.start, current.end,
-                         ok, "merge_compatible" if ok else "", tuple(dict.fromkeys(reasons)), gap,
+                         ok, accepted_reason, tuple(dict.fromkeys(reasons)), gap,
                          _child_gap_text(previous, current, "left"), _child_gap_text(previous, current, "right"))
 
 

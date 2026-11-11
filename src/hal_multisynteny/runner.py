@@ -107,8 +107,8 @@ class RunTreeConfig:
     compact_ancestry: bool = False
 
     def __post_init__(self):
-        if self.reconciliation_policy not in {"common-refinement", "segment-chaining"}:
-            raise ValueError("reconciliation_policy must be common-refinement or segment-chaining")
+        if self.reconciliation_policy not in {"common-refinement", "segment-chaining", "anchor-chaining"}:
+            raise ValueError("reconciliation_policy must be common-refinement, segment-chaining, or anchor-chaining")
         region = (self.region_chrom, self.region_start, self.region_end)
         if any(value is not None for value in region) and not (
             self.region_chrom and self.region_start is not None and self.region_end is not None and
@@ -232,8 +232,9 @@ def run_tree(
                 max_child_gap=config.max_child_gap,
                 gap_tolerant=config.gap_tolerant,
                 copy_id_scope=config.copy_id_scope,
-                preserve_atomic_boundaries=config.reconciliation_policy != "segment-chaining",
+                preserve_atomic_boundaries=config.reconciliation_policy == "common-refinement",
                 segment_chaining=config.reconciliation_policy == "segment-chaining",
+                anchor_chaining=config.reconciliation_policy == "anchor-chaining",
                 guide_tree_id=plan.tree_sha256,
             ),
             profile=profile_stages if config.profile else None,

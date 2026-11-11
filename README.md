@@ -632,6 +632,18 @@ The bounded Palaeognathae native-vs-halSynteny comparison remains blocked until
 region-restricted native segment indexing is available; see
 [`experiments/palaeognathae-native-comparison/REPORT.md`](experiments/palaeognathae-native-comparison/REPORT.md).
 
+### Anchor chaining (experimental)
+
+`--reconciliation-policy anchor-chaining` is an opt-in extension of native
+segment chaining. It removes only atom boundaries caused by inherited or
+classification changes when at least one child track remains collinear; missing
+evidence is not treated as deletion. Chromosome changes, orientation changes,
+non-monotonic order, unresolved ambiguity/duplication, and explicit gap limits
+remain hard barriers. Accepted decisions record an anchor-chain score in
+`merge_decisions.tsv`. The default `common-refinement` and existing
+`segment-chaining` policies are unchanged. The Palaeognathae benchmark is in
+[`experiments/anchor-chaining/REPORT.md`](experiments/anchor-chaining/REPORT.md).
+
 Validated native indexes can be supplied to `run-tree` with
 `--native-index-dir`; bounded parent-coordinate analyses additionally use
 `--region-chrom`, `--region-start`, and `--region-end`. These options require a

@@ -228,6 +228,23 @@ direct ancestry links, with zero eager internal leaf occurrences. Results and
 commands are in `experiments/compact-ancestry-10mb/REPORT.md`. These are
 engineering measurements, not genome-wide biological conclusions.
 
+## 2026-11-11 — experimental anchor-chaining policy
+
+Added opt-in `--reconciliation-policy anchor-chaining`; the default and prior
+segment-chaining policies are unchanged. Anchor mode removes soft inherited/
+classification boundaries when at least one child remains collinear, while
+chromosome, orientation, order, unresolved-copy, and configured gap barriers
+remain hard. On the indexed Anc3 interval, anchor gap-1kb reduced blocks from
+1,014 to 415 at 100 kb, 18,396 to 5,554 at 1 Mb, and 84,009 to 35,338 at
+10 Mb; empirical mean spans increased to 241.0, 180.1, and 283.0 bp. Exact
+child-gap bases and structural-barrier counts remain reported separately.
+
+This is an experimental two-leaf engineering result, not a biological claim.
+The algorithm uses a linear ordered compatibility sweep rather than a full DP
+over alternatives; the next step is independent-anchor validation and then a
+score-bearing DP for competing chains. Details and exact profiles are in
+`experiments/anchor-chaining/REPORT.md`.
+
 ## 2026-11-11 — Method 1/Method 3 fragmentation diagnosis
 
 The installed HAL v2.2 `halSynteny` advertises `--queryChromosome` but no
