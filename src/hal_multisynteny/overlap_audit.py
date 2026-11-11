@@ -221,7 +221,13 @@ def audit_preserved_psl(audit_dir, output_prefix):
             }
         )
     planned_edges = set()
-    for plan_path in sorted(audit_dir.glob("results*/plan.json")):
+    # The canonical plan is tracked; generated result directories are commonly
+    # ignored. Include both, but deduplicate edges so a local ignored plan
+    # cannot change the portable report produced from a clean checkout.
+    plan_paths = [audit_dir / "plan.json", *sorted(audit_dir.glob("results*/plan.json"))]
+    for plan_path in plan_paths:
+        if not plan_path.is_file():
+            continue
         for edge in json.loads(plan_path.read_text()).get("edges", []):
             planned_edges.add((edge["child_hal_genome"], edge["parent_hal_genome"]))
     covered_edges = {(edge["child_genome"], edge["parent_genome"]) for edge in edge_rows}

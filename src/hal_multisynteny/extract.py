@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -401,6 +402,44 @@ class FakeEdgeExtractor:
         return tuple(records)
 
 
+class _IntervalIndex:
+    """Static centered interval tree with deterministic overlap queries."""
+
+    def __init__(self, blocks):
+        intervals = tuple(sorted(blocks, key=lambda block: (block.start, block.end, block.block_id)))
+        self._root = self._build(intervals)
+
+    @classmethod
+    def _build(cls, intervals):
+        if not intervals:
+            return None
+        center = sorted((block.start + block.end) // 2 for block in intervals)[len(intervals) // 2]
+        crossing = tuple(block for block in intervals if block.start <= center < block.end)
+        left = tuple(block for block in intervals if block.end <= center)
+        right = tuple(block for block in intervals if block.start > center)
+        return (center, tuple(sorted(crossing, key=lambda block: (block.start, block.end, block.block_id))),
+                cls._build(left), cls._build(right))
+
+    def query(self, start, end):
+        found = []
+
+        def visit(node):
+            if node is None:
+                return
+            center, crossing, left, right = node
+            found.extend(block for block in crossing if block.start < end and block.end > start)
+            if start < center:
+                visit(left)
+            if end > center:
+                visit(right)
+
+        visit(self._root)
+        return tuple(sorted(found, key=lambda block: (block.start, block.end, block.block_id)))
+
+
+_EMPTY_INTERVAL_INDEX = _IntervalIndex(())
+
+
 class NativeSegmentExtractor:
     """Batched native HAL segment extractor using ``halAlignedExtract``.
 
@@ -410,7 +449,7 @@ class NativeSegmentExtractor:
     explicit EdgeMappingRun TSV may still be supplied for deterministic tests.
     """
 
-    def __init__(self, source: str | Path):
+    def __init__(self, source: str | Path, cache_dir: str | Path | None = None):
         self.source = Path(source)
         self.mapping_path = self.source if self.source.suffix != ".hal" else None
         self.hal_path = self.source if self.source.suffix == ".hal" else None
@@ -420,18 +459,43 @@ class NativeSegmentExtractor:
         if self.hal_path and not self.executable:
             raise ExtractionError("missing HAL tool: halAlignedExtract is not on PATH")
         self._fixture = FakeEdgeExtractor(self.mapping_path) if self.mapping_path else None
-        self._segments_cache: dict[str, tuple[tuple[str, int, int, str, int, int, str, int], ...]] = {}
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else None
+        if self.cache_dir is not None:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.hal_checksum = sha256_file(self.hal_path) if self.hal_path else "fixture"
+        self.native_tool_version = "v2.2"
 
-    def _segment_rows(self, child_hal_genome: str):
-        """Read one direct HAL edge once and cache its fine-grained segments."""
-        cached = self._segments_cache.get(child_hal_genome)
-        if cached is not None:
-            return cached
+    def _cache_path(self, child_hal_genome: str, parent_hal_genome: str) -> Path:
+        key = hashlib.sha256(
+            f"{self.hal_checksum}\0{child_hal_genome}\0{parent_hal_genome}\0{self.native_tool_version}\0{self.executable}\0viewParentCoords".encode()
+        ).hexdigest()
+        return self.cache_dir / f"{key}.segments.tsv"
+
+    def _segment_rows(self, child_hal_genome: str, parent_hal_genome: str):
+        """Stream one direct HAL edge, reusing a complete disk-backed cache."""
+        cache_path = self._cache_path(child_hal_genome, parent_hal_genome) if self.cache_dir else None
+        if cache_path and cache_path.exists():
+            with cache_path.open(encoding="utf-8") as handle:
+                for line_number, line in enumerate(handle, 1):
+                    fields = line.rstrip("\n").split("\t")
+                    if len(fields) != 8:
+                        raise ExtractionError(f"native cache line {line_number}: expected 8 columns")
+                    try:
+                        child_start, child_end, parent_start, parent_end = map(int, (fields[1], fields[2], fields[4], fields[5]))
+                        line_origin = int(fields[7])
+                    except ValueError as exc:
+                        raise ExtractionError(f"native cache line {line_number}: invalid coordinates") from exc
+                    if not (0 <= child_start < child_end and 0 <= parent_start < parent_end and fields[6] in {"+", "-"}):
+                        raise ExtractionError(f"native cache line {line_number}: invalid segment")
+                    yield fields[0], child_start, child_end, fields[3], parent_start, parent_end, fields[6], line_origin
+            return
         if self.hal_path is None:
             raise ExtractionError("native segment rows require a HAL file")
         command = (self.executable, str(self.hal_path), child_hal_genome, "--viewParentCoords")
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        rows = []
+        temporary = cache_path.with_suffix(".tmp") if cache_path else None
+        output = temporary.open("w", encoding="utf-8") if temporary else None
+        complete = False
         try:
             for line_number, line in enumerate(process.stdout, 1):
                 line = line.rstrip("\n")
@@ -447,14 +511,24 @@ class NativeSegmentExtractor:
                     raise ExtractionError(f"halAlignedExtract line {line_number}: invalid coordinates") from exc
                 if not (0 <= child_start < child_end and 0 <= parent_start < parent_end and strand in {"+", "-"}):
                     raise ExtractionError(f"halAlignedExtract line {line_number}: invalid segment")
-                rows.append((child_chrom, child_start, child_end, parent_chrom, parent_start, parent_end, strand, line_number))
+                row = (child_chrom, child_start, child_end, parent_chrom, parent_start, parent_end, strand, line_number)
+                if output:
+                    output.write("\t".join(map(str, row)) + "\n")
+                yield row
+            complete = True
         finally:
+            if output:
+                output.close()
             stderr = process.stderr.read() if process.stderr else ""
             returncode = process.wait()
+            if not complete and temporary:
+                temporary.unlink(missing_ok=True)
         if returncode:
+            if temporary:
+                temporary.unlink(missing_ok=True)
             raise ExtractionError(f"halAlignedExtract failed with exit {returncode}: {stderr.strip()}")
-        self._segments_cache[child_hal_genome] = tuple(rows)
-        return self._segments_cache[child_hal_genome]
+        if temporary and cache_path and complete:
+            os.replace(temporary, cache_path)
 
     def extract(self, child_node_id, parent_node_id, child_hal_genome, parent_hal_genome, child_blocks):
         if self._fixture is not None:
@@ -465,16 +539,11 @@ class NativeSegmentExtractor:
         by_chrom = defaultdict(list)
         for block in blocks:
             by_chrom[block.chrom].append(block)
-        for chrom in by_chrom:
-            by_chrom[chrom].sort(key=lambda block: (block.start, block.end, block.block_id))
+        indexes = {chrom: _IntervalIndex(chrom_blocks) for chrom, chrom_blocks in by_chrom.items()}
         runs = []
         mapped = set()
-        for child_chrom, child_start, child_end, parent_chrom, parent_start, parent_end, strand, line_number in self._segment_rows(child_hal_genome):
-            for block in by_chrom.get(child_chrom, ()):
-                if block.start >= child_end:
-                    break
-                if block.chrom != child_chrom or block.end <= child_start or block.start >= child_end:
-                    continue
+        for child_chrom, child_start, child_end, parent_chrom, parent_start, parent_end, strand, line_number in self._segment_rows(child_hal_genome, parent_hal_genome):
+            for block in indexes.get(child_chrom, _EMPTY_INTERVAL_INDEX).query(child_start, child_end):
                 start, end = max(block.start, child_start), min(block.end, child_end)
                 if end <= start:
                     continue
@@ -492,18 +561,20 @@ class NativeSegmentExtractor:
             alternatives[(run.child_block_id, run.child_node)].add((run.parent_chrom, run.parent_start, run.parent_end, run.strand))
         runs = [replace(run, status="ambiguous", hypothesis_id=f"native-alt:{run.child_block_id}",
                         current_edge_barrier_status="ambiguous") if len(alternatives[(run.child_block_id, run.child_node)]) > 1 else run for run in runs]
+        runs.sort(key=lambda run: (run.child_chrom, run.child_start, run.child_end, run.parent_chrom,
+                                   run.parent_start, run.parent_end, run.child_block_id, run.component_id))
         unmapped = tuple(UnmappedEdgeEvidence(child_node_id, parent_node_id, b.block_id, b.chrom, b.start, b.end,
                          "unaligned", "native HAL segment stream has no overlap", f"native:{b.block_id}:unaligned", "halAlignedExtract", json.dumps(command))
                          for b in blocks if b.block_id not in mapped)
         return EdgeExtractionResult(tuple(runs), unmapped, "hal-native-segments", {"halAlignedExtract": "v2.2"}, (command,), ())
 
-    def leaf_blocks(self, child_hal_genome: str):
+    def leaf_blocks(self, child_hal_genome: str, parent_hal_genome: str):
         """Return fine-grained child intervals directly from HAL segment boundaries."""
         if self.hal_path is None:
             raise ExtractionError("automatic native leaf initialization requires a HAL file")
         blocks = []
         seen = set()
-        for chrom, start, end, _parent_chrom, _parent_start, _parent_end, _strand, _line_number in self._segment_rows(child_hal_genome):
+        for chrom, start, end, _parent_chrom, _parent_start, _parent_end, _strand, _line_number in self._segment_rows(child_hal_genome, parent_hal_genome):
             key = (chrom, start, end)
             if key in seen:
                 continue

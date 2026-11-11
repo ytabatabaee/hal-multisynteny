@@ -130,7 +130,12 @@ def run_tree(
         plan = build_traversal_plan(tree_path, node_map_path)
     output = Path(output_dir)
     nodes_dir = output / "nodes"
-    extractor = None if config.dry_run else _build_extractor(config)
+    if config.dry_run:
+        extractor = None
+    elif config.backend == "hal-native-segments":
+        extractor = _build_extractor(config, output / ".native-cache")
+    else:
+        extractor = _build_extractor(config)
     identity = _run_identity(config, plan, leaf_blocks, hal_info)
     if config.backend in {"hal-psl-conservative", "hal-psl-piecewise", "hal-synteny-overlay"} and extractor is not None:
         identity["psl_extractor"] = extractor.identity()
@@ -147,7 +152,7 @@ def run_tree(
         _write_json_atomic(output / "dry-run-plan.json", plan_payload)
         return plan_payload
 
-    _init_leaf_packages_from_plan(plan, leaf_blocks, output, config.resume, identity, config)
+    _init_leaf_packages_from_plan(plan, leaf_blocks, output, config.resume, identity, config, extractor)
     packages = {
         node_id: load_package(nodes_dir / node_id, node_id, plan.node_to_hal[node_id])
         for node_id in plan.node_to_hal
@@ -304,6 +309,7 @@ def _init_leaf_packages_from_plan(
     resume: bool,
     identity: dict[str, object],
     config: RunTreeConfig,
+    extractor: EdgeExtractor | None = None,
 ) -> None:
     if config.leaf_init not in {"supplied", "halsynteny", "native"}:
         raise CheckpointError("leaf_init must be supplied, native, or halsynteny")
@@ -323,9 +329,10 @@ def _init_leaf_packages_from_plan(
     if config.leaf_init == "native":
         if not config.hal:
             raise CheckpointError("--hal is required with --leaf-init native")
-        native = NativeSegmentExtractor(config.hal)
+        native = extractor if isinstance(extractor, NativeSegmentExtractor) else NativeSegmentExtractor(config.hal, Path(output_dir) / ".native-cache")
         for leaf in sorted(leaves):
-            for block in native.leaf_blocks(plan.node_to_hal[leaf]):
+            parent = next(step.hal_genome for step in plan.steps if step.left_child == leaf or step.right_child == leaf)
+            for block in native.leaf_blocks(plan.node_to_hal[leaf], parent):
                 by_leaf[leaf].append({"leaf": leaf, "block_id": block.block_id, "chrom": block.chrom,
                     "start": str(block.start), "end": str(block.end), "strand": "+", "copy_id": "1",
                     "status": "unique", "source": "halAlignedExtract-native-segment"})
@@ -954,7 +961,7 @@ def _forced_nodes(plan: TraversalPlan, force_node: str | None) -> set[str]:
     return forced
 
 
-def _build_extractor(config: RunTreeConfig) -> EdgeExtractor:
+def _build_extractor(config: RunTreeConfig, cache_dir: str | Path | None = None) -> EdgeExtractor:
     if config.backend == "fake":
         if not config.fake_mappings:
             raise CheckpointError("--fake-mappings is required for the fake backend")
@@ -964,7 +971,7 @@ def _build_extractor(config: RunTreeConfig) -> EdgeExtractor:
             return NativeSegmentExtractor(config.fake_mappings)
         if not config.hal:
             raise CheckpointError("--hal is required for hal-native-segments when --fake-mappings is absent")
-        return NativeSegmentExtractor(config.hal)
+        return NativeSegmentExtractor(config.hal, cache_dir)
     if is_hal_backend(config.backend):
         if not config.hal:
             raise CheckpointError("--hal is required for the HAL backend")

@@ -93,3 +93,15 @@ adapter from inventing copy IDs or silently collapsing duplications.
 Final validation with `.hal-env/bin` on `PATH`: 266 tests passed and 1 warning;
 Ruff passed. The existing portable-evidence regression also passed. Package
 build remains network-blocked while isolated Hatchling dependencies are fetched.
+
+The CI follow-up found that `results-all-direct/plan.json` is ignored and exists
+only in some local workspaces. Including it alone made
+`planned_edges_without_psl` environment-dependent. Report generation now starts
+from the tracked canonical `audit/plan.json` and deduplicates optional generated
+plans. The portable report regression passes without ignored files.
+
+The hardened tiny-HAL benchmark is recorded in
+`experiments/native-segments/REPORT.md`: six direct edges caused six native
+invocations and 10 extracted segment rows, and resumed execution reused all
+cache entries. The pilot still has no accepted root merges, so larger-block
+biological validation remains outstanding.

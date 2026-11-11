@@ -409,4 +409,7 @@ C++ helper is unnecessary; the CLI is the reproducible native boundary. The
 CLI has no orthology/paralogy field: native records carry unresolved-copy
 provenance, and multiple target geometries for one child block are retained as
 ambiguous alternatives rather than given synthetic copy IDs. Leaf seeding and
-the corresponding edge reuse one cached segment stream.
+the corresponding edge reuse one cached segment stream. The stream is persisted
+as an atomic, identity-keyed TSV cache and consumed lazily; a centered interval
+tree performs the child-block join without a per-segment scan from the beginning
+of the chromosome.

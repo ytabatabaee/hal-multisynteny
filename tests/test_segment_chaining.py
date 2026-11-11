@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from hal_multisynteny.extract import NativeSegmentExtractor
-from hal_multisynteny.models import ParentMappedRun
+from hal_multisynteny.extract import NativeSegmentExtractor, _IntervalIndex
+from hal_multisynteny.models import NodeBlock, ParentMappedRun
 from hal_multisynteny.reconcile import ReconcileConfig, reconcile_node
 from hal_multisynteny.runner import RunTreeConfig, run_tree
 
@@ -30,13 +30,40 @@ def test_segment_chaining_policy_is_explicit_and_legacy_default_remains():
     assert RunTreeConfig(reconciliation_policy="segment-chaining").reconciliation_policy == "segment-chaining"
 
 
+def test_native_interval_index_handles_nested_overlap_and_boundaries():
+    blocks = [
+        NodeBlock("outer", "child", "chr1", 0, 100, "seed", "unique"),
+        NodeBlock("inner", "child", "chr1", 20, 40, "seed", "unique"),
+        NodeBlock("tail", "child", "chr1", 100, 120, "seed", "unique"),
+    ]
+    index = _IntervalIndex(blocks)
+    assert [block.block_id for block in index.query(35, 50)] == ["outer", "inner"]
+    assert [block.block_id for block in index.query(100, 110)] == ["tail"]
+    assert index.query(120, 130) == ()
+
+
+@pytest.mark.hal
+def test_native_extract_projects_unsorted_segments_and_reverse_strand(monkeypatch):
+    hal = Path("tests/fixtures/tiny_hal/build/tiny.hal")
+    extractor = NativeSegmentExtractor(hal)
+    rows = (
+        ("chrA", 10, 20, "chrAB", 20, 30, "-", 2),
+        ("chrA", 0, 10, "chrAB", 0, 10, "+", 1),
+    )
+    monkeypatch.setattr(extractor, "_segment_rows", lambda *_args: iter(rows))
+    blocks = [NodeBlock("b", "A", "chrA", 0, 20, "seed", "unique")]
+    result = extractor.extract("A", "ancAB", "HAL_A", "HAL_ancAB", blocks)
+    assert [(run.child_start, run.child_end, run.strand) for run in result.runs] == [(0, 10, "+"), (10, 20, "-")]
+    assert (result.runs[1].parent_start, result.runs[1].parent_end) == (20, 30)
+
+
 @pytest.mark.hal
 def test_native_hal_aligned_extract_reads_real_tiny_segments():
     if shutil.which("halAlignedExtract") is None:
         pytest.skip("halAlignedExtract is not on PATH")
     hal = Path("tests/fixtures/tiny_hal/build/tiny.hal")
     extractor = NativeSegmentExtractor(hal)
-    blocks = extractor.leaf_blocks("HAL_A")
+    blocks = extractor.leaf_blocks("HAL_A", "HAL_ancAB")
     assert blocks
     result = extractor.extract("A", "ancAB", "HAL_A", "HAL_ancAB", blocks)
     assert result.backend == "hal-native-segments"

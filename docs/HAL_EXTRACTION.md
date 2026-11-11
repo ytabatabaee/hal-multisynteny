@@ -92,8 +92,8 @@ The experimental `hal-native-segments` backend uses the installed native
 direct child edge. It streams child/parent segment coordinates and strand into
 the existing `EdgeMappingRun` schema; missing intervals remain explicit
 unaligned evidence and multiple alternatives remain separate records. Leaf
-initialization and the first edge extraction share the same in-memory segment
-stream, so automatic native initialization does not rerun the command for the
+initialization and the first edge extraction share the same disk-backed segment
+cache, so automatic native initialization does not rerun the command for the
 same child genome. The native CLI does not expose orthology, paralogy, or copy
 identity: a single emitted segment is therefore only coordinate-unique
 evidence, recorded with an unresolved-copy marker, and distinct target
@@ -101,3 +101,10 @@ alternatives for one child block are marked ambiguous rather than assigned an
 invented copy ID. The environment contains the native executable but not HAL
 C++ development headers, so no standalone C++ helper is built or required. An
 explicit segment TSV is still supported for deterministic tests.
+
+For a HAL input, extracted rows are written to an atomic disk-backed cache
+keyed by HAL checksum, child/parent genome pair, tool version, and extraction
+options. Cache reads are streamed, and a centered interval index performs the
+child-block join without restarting a scan at the first block for every native
+segment. The implementation targets `O(S log S + B log B + K)` behavior while
+preserving every overlap; native input order is not assumed to be sorted.
