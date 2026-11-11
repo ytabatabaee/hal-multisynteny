@@ -175,3 +175,22 @@ blocks (median 8 bp); thresholds 100/1,000/10,000 reduced this to 3,082/3,078/
 conservation remained exact in every run. These are engineering observations,
 not genome-wide biological conclusions. Full details and commands are in
 `experiments/gap-tolerant-chaining/REPORT.md`.
+
+## 2026-11-11 — orientation-aware chaining correction
+
+The native strand audit on the 100-kb Anc3 region found that all 2,564 prior
+`orientation_conflict` atoms shared one stable `(-,+)` signature: the left
+edge was uniformly reverse-oriented and the right edge uniformly forward-
+oriented. Reconciliation now permits constant opposite orientations between
+child tracks while retaining orientation transitions, chromosome changes,
+non-monotonic order, ambiguity, and duplication as barriers. Native extraction
+semantics were verified against direct `halAlignedExtract` coordinates and
+independent `halLiftover` evidence; no extractor change was needed.
+
+The revised strict run on `PalaeognathaeAnc3refChr301:0-100000` produced 1,553
+blocks (median 22 bp, mean 64.4 bp) versus 3,371 blocks before the correction.
+Revised gap-tolerant runs produced 1,025 blocks at 100-bp gaps and 1,014 at
+1-kb gaps. Downward conservation remained exact. A revised 1-Mb attempt was
+interrupted after 367.64 s in relationship accounting before checkpoint output;
+this is recorded as a scaling blocker in
+`experiments/orientation-aware-chaining/REPORT.md`.

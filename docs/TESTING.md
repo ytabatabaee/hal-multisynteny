@@ -49,6 +49,12 @@ coordinates, large/child-gap barriers, and preservation of multiple native
 target geometries as ambiguous unresolved alternatives. They do not claim
 native paralogy resolution.
 
+Orientation regressions cover matching orientations, stable opposite
+orientations, within-track orientation transitions, reverse-order mappings,
+translocations, and gapped opposite-orientation continuation. Native HAL tests
+also verify the direct `halAlignedExtract --viewParentCoords` strand and
+coordinate interpretation.
+
 `tests/test_native_index.py` covers child- and parent-coordinate overlap
 queries, identity metadata, and interrupted-build cleanup. The index builder is
 streaming and disk-backed; generated SQLite stores are temporary experiment

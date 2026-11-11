@@ -115,12 +115,12 @@
       "block_count": 2,
       "node_occurrence_count": 4,
       "leaf_occurrence_count": 4,
-      "conflict_count": 1,
-      "conflict_types": ["orientation_conflict"],
+      "conflict_count": 0,
+      "conflict_types": [],
       "unmapped": {"left": ["A_unmapped"], "right": []},
       "blocks": [
         {"block_id": "HMSP00000001", "chrom": "chrAB", "start": 0, "end": 10, "classification": "shared_consistent", "leaves": ["A", "B"], "leaf_orientations": {"A": "+", "B": "+"}},
-        {"block_id": "HMSP00000002", "chrom": "chrAB", "start": 20, "end": 30, "classification": "orientation_conflict", "leaves": ["A", "B"], "leaf_orientations": {"A": "-", "B": "+"}}
+        {"block_id": "HMSP00000002", "chrom": "chrAB", "start": 20, "end": 30, "classification": "shared_consistent", "leaves": ["A", "B"], "leaf_orientations": {"A": "-", "B": "+"}}
       ]
     },
     "ancCD": {

@@ -335,6 +335,15 @@ is interpolated across them. Filtered atoms and explicit chain boundaries remain
 hard barriers. The general greedy grouping algorithm and strict defaults are
 unchanged.
 
+Orientation is tracked per continuing descendant rather than compared as an
+unordered set between siblings. A stable `(-,+)` (or any other constant
+opposite-signature) arrangement is compatible and remains explicit in the
+atomic interval's left/right orientation fields. Mixed orientation evidence
+within one track and transitions between neighboring atoms remain barriers via
+`orientation_conflict`, `orientation_change`, or the existing order checks.
+This prevents a conserved inverted region from being mislabeled as an
+unresolved conflict while retaining genuine rearrangement boundaries.
+
 ### Execution, checkpoints, and statistics
 
 For n leaves, a fresh full traversal computes 2n−2 direct halSynteny edges and

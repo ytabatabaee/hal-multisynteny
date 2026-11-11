@@ -394,7 +394,10 @@ def _classify(
     conflict_types: list[str] = []
     left_orientations = {record.strand for record in usable_left}
     right_orientations = {record.strand for record in usable_right}
-    if left_orientations != right_orientations or len(left_orientations) != 1:
+    # A constant opposite orientation between the two child tracks is a valid
+    # relative arrangement.  A conflict is an orientation transition within
+    # one continuing track (or mixed orientation evidence in one atom).
+    if len(left_orientations) != 1 or len(right_orientations) != 1:
         conflict_types.append("orientation_conflict")
     if any(
         (record.child_node, record.child_block_id, record.child_occurrence_id, record.copy_id)

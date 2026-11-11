@@ -424,13 +424,27 @@ def test_gapped_projected_pieces_stay_separate_in_merged_block():
     assert_occurrence_invariants(result)
 
 
-def test_inversion_is_orientation_conflict_and_prevents_merge():
+def test_stable_opposite_orientation_is_shared_and_can_merge():
     result = reconcile(
         [mapped("left", "L", "l", 0, 100)],
         [mapped("right", "R", "r", 0, 100, strand="-")],
     )
-    assert classifications(result) == ["orientation_conflict"]
-    assert result.conflicts[0].resolution == "unresolved"
+    assert classifications(result) == ["shared_consistent"]
+
+
+def test_orientation_transition_within_child_remains_a_barrier():
+    result = reconcile(
+        [
+            mapped("left", "L1", "l1", 0, 10, strand="+"),
+            mapped("left", "L2", "l2", 10, 20, strand="+"),
+        ],
+        [
+            mapped("right", "R1", "r1", 0, 10, strand="-"),
+            mapped("right", "R2", "r2", 10, 20, strand="+"),
+        ],
+    )
+    assert len(result.blocks) == 2
+    assert any("orientation_change" in d.rejection_reasons for d in result.merge_decisions)
 
 
 def test_translocation_within_occurrence_is_order_conflict():
@@ -681,7 +695,7 @@ def test_incomplete_global_duplication_plus_orientation_conflict_is_complex():
     left = [mapped("left", "L", "l1", 0, 100, copy="1", status="duplicated")]
     right = [mapped("right", "R", "r1", 0, 100, copy="1", strand="-")]
     result = reconcile(left, right, copy_id_scope="global")
-    assert classifications(result) == ["complex"]
+    assert classifications(result) == ["duplication_conflict"]
     assert len(result.occurrences) == 2
     assert len(result.provenance) == 2
 
@@ -694,7 +708,7 @@ def test_duplication_plus_orientation_conflict_is_complex():
         ],
         [mapped("right", "R", "r", 0, 10, strand="-")],
     )
-    assert classifications(result) == ["complex"]
+    assert classifications(result) == ["duplication_conflict"]
 
 
 def test_missing_quality_classifications_are_conservative():
