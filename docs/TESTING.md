@@ -78,3 +78,8 @@ byte-stability checks on scientifically meaningful root outputs.
 The generated HAL file and smoke outputs are intentionally ignored by source
 control. Commit the source MAFs, manifests, tests, and scripts, not generated HAL
 or output directories.
+
+Compact-mode tests cover reverse-strand projection, selected-leaf pruning,
+unsupported-gap preservation, and equivalence with legacy explicit leaf
+occurrences. Real compact benchmarks use the same native indexed HAL inputs as
+the legacy runs and are recorded under `experiments/compact-ancestry-10mb/`.

@@ -9,6 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import __version__
+from .ancestry import get_descendant_occurrences
 from .audit import audit_liftover
 from .audit_workflow import (
     assess_audit,
@@ -249,6 +250,7 @@ def _run_tree(args: argparse.Namespace) -> int:
             gap_tolerant=args.gap_tolerant,
             profile=args.profile,
             profile_output=args.profile_output,
+            compact_ancestry=args.compact_ancestry,
             copy_id_scope=args.copy_id_scope,
             resume=args.resume,
             force_node=args.force_node,
@@ -278,6 +280,15 @@ def _refine_downward(args):
     refine_tree(tree_path=args.tree, node_map_path=args.node_map,
                 output_dir=args.output_dir, resume=args.resume)
     print("downward refinement complete")
+    return 0
+
+
+def _query_descendants(args: argparse.Namespace) -> int:
+    interval = None if args.start is None else (args.start, args.end)
+    import json
+    records = get_descendant_occurrences(args.run_dir, args.node, args.block_id,
+                                         leaves=args.leaf, interval=interval)
+    print(json.dumps(records, indent=2, sort_keys=True))
     return 0
 
 
@@ -447,6 +458,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="allow bounded unaligned gaps between collinear segments")
     run.add_argument("--profile", action="store_true", help="write stage timing and peak RSS profile")
     run.add_argument("--profile-output", help="profile JSON path (default: <output-dir>/profile.json)")
+    run.add_argument("--compact-ancestry", action="store_true",
+                     help="store immediate ancestry links and reconstruct leaf occurrences lazily")
     run.add_argument("--copy-id-scope", choices=("local", "global"), default="local")
     run.add_argument("--resume", action="store_true")
     run.add_argument("--force-node")
@@ -473,6 +486,15 @@ def build_parser() -> argparse.ArgumentParser:
     downward.add_argument("--node-map", required=True)
     downward.add_argument("--output-dir", required=True)
     downward.add_argument("--resume", action="store_true")
+
+    query = subparsers.add_parser("query-descendants", help="lazily reconstruct leaf occurrences from compact checkpoints")
+    query.add_argument("--run-dir", required=True)
+    query.add_argument("--node", required=True)
+    query.add_argument("--block-id", required=True)
+    query.add_argument("--leaf", action="append")
+    query.add_argument("--start", type=int)
+    query.add_argument("--end", type=int)
+    query.set_defaults(func=_query_descendants)
     downward.set_defaults(func=_refine_downward)
 
     visualize = subparsers.add_parser("visualize-run", help="render a stored upward/downward run as self-contained HTML")

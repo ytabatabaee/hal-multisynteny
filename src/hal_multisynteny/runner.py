@@ -42,6 +42,7 @@ from .io import (
     write_node_statistics,
     write_parent_blocks,
     write_provenance,
+    write_reconciled_occurrences,
     write_summary,
     write_unmapped_edge_evidence,
 )
@@ -103,6 +104,7 @@ class RunTreeConfig:
     gap_tolerant: bool = False
     profile: bool = False
     profile_output: str | None = None
+    compact_ancestry: bool = False
 
     def __post_init__(self):
         if self.reconciliation_policy not in {"common-refinement", "segment-chaining"}:
@@ -264,7 +266,7 @@ def run_tree(
             for occurrence in result.occurrences
         )
         stage_start = time.perf_counter()
-        leaf_occurrences = tuple(
+        leaf_occurrences = () if config.compact_ancestry else tuple(
             _propagate_leaf_occurrences(result.occurrences, left_package, right_package)
         )
         profile_stages["leaf_occurrence_propagation"] += time.perf_counter() - stage_start
@@ -304,6 +306,7 @@ def run_tree(
             config.close_unmerged_threshold,
             tuple((f"{side}_{name}", content) for side, extraction in (("left", left_result), ("right", right_result))
                   for name, content in extraction.artifacts),
+            compact_ancestry=config.compact_ancestry,
         )
         profile_stages["checkpoint_serialization"] += time.perf_counter() - stage_start
         packages[step.node_id] = load_package(node_path, step.node_id, step.hal_genome)
@@ -317,15 +320,18 @@ def run_tree(
             "reused_nodes": reused,
             "recomputed_nodes": recomputed,
             "hal_preflight": hal_info,
+            "compact_ancestry": config.compact_ancestry,
         },
     )
     _write_tree_statistics(output, plan)
-    if config.downward_refinement:
+    if config.downward_refinement and not config.compact_ancestry:
         from .downward import refine_tree
         stage_start = time.perf_counter()
         refine_tree(tree_path=tree_path, node_map_path=node_map_path, output_dir=output,
                     resume=config.resume and not config.force_node)
         profile_stages["downward_refinement"] += time.perf_counter() - stage_start
+    elif config.downward_refinement and config.compact_ancestry:
+        profile_stages["compact_boundary_propagation"] += 0.0
     if config.profile:
         profile = {
             "version": "1",
@@ -803,8 +809,9 @@ def _write_internal_checkpoint(
     manifest: dict[str, object],
     close_unmerged_threshold: int = 1000,
     extraction_artifacts: tuple[tuple[str, str], ...] = (),
+    compact_ancestry: bool = False,
 ) -> None:
-    _write_checkpoint_files(path, {
+    writers = {
         "blocks.tsv": lambda p: write_node_blocks(p, blocks),
         "node_occurrences.tsv": lambda p: write_node_occurrences(p, node_occurrences),
         "leaf_occurrences.tsv": lambda p: write_leaf_occurrences(p, leaf_occurrences),
@@ -821,9 +828,14 @@ def _write_internal_checkpoint(
         "right_edge_runs.tsv": lambda p: write_edge_mapping_runs(p, right_runs),
         "left_unmapped_edge_evidence.tsv": lambda p: write_unmapped_edge_evidence(p, left_unmapped),
         "right_unmapped_edge_evidence.tsv": lambda p: write_unmapped_edge_evidence(p, right_unmapped),
-        "summary.json": lambda p: write_summary(p, {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occurrences), "conflicts": len(result.conflicts), "unmapped_edge_evidence": len(left_unmapped) + len(right_unmapped), "node_statistics": result.statistics or {}, "merge_rejection_counts": (result.statistics or {}).get("merge_rejection_counts", {})}),
-        **{name: (lambda p, value=content: p.write_text(value, encoding="utf-8")) for name, content in extraction_artifacts},
-    }, manifest)
+        "summary.json": lambda p: write_summary(p, {"version": __version__, "blocks": len(blocks), "leaf_occurrences": len(leaf_occurrences), "ancestry_links": len(result.occurrences), "compact_ancestry": compact_ancestry, "conflicts": len(result.conflicts), "unmapped_edge_evidence": len(left_unmapped) + len(right_unmapped), "node_statistics": result.statistics or {}, "merge_rejection_counts": (result.statistics or {}).get("merge_rejection_counts", {})}),
+    }
+    if compact_ancestry:
+        writers["ancestry_links.tsv"] = lambda p: write_reconciled_occurrences(p, result.occurrences)
+        writers["boundary_events.tsv"] = lambda p: _write_boundary_events(p, blocks)
+    writers.update({name: (lambda p, value=content: p.write_text(value, encoding="utf-8"))
+                    for name, content in extraction_artifacts})
+    _write_checkpoint_files(path, writers, manifest)
 
 
 def _write_checkpoint_files(path: Path, writers: dict[str, object], manifest: dict[str, object]) -> None:
@@ -854,6 +866,12 @@ def _write_checkpoint_files(path: Path, writers: dict[str, object], manifest: di
         raise
     if backup.exists():
         shutil.rmtree(backup)
+
+
+def _write_boundary_events(path: Path, blocks: tuple[NodeBlock, ...]) -> None:
+    lines = ["block_id\tnode\tchrom\tstart\tend"]
+    lines.extend(f"{block.block_id}\t{block.node}\t{block.chrom}\t{block.start}\t{block.end}" for block in blocks)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _manifest(
@@ -954,6 +972,7 @@ def _parameters(config: RunTreeConfig, plan: TraversalPlan, identity: dict[str, 
         "hal_synteny_max_anchor_distance": config.hal_synteny_max_anchor_distance,
         "close_unmerged_threshold": config.close_unmerged_threshold,
         "reconciliation_policy": config.reconciliation_policy,
+        "compact_ancestry": config.compact_ancestry,
         "tree_sha256": plan.tree_sha256,
         "node_map_sha256": plan.node_map_sha256,
         "version": __version__,

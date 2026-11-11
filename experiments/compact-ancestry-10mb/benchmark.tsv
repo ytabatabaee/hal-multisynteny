@@ -1,0 +1,4 @@
+region_bp	wall_seconds	peak_rss_bytes	disk_kb	leaf_a_blocks	leaf_b_blocks	anc3_blocks	anc3_atomic_intervals	anc3_ancestry_links	legacy_leaf_occurrences
+100000	93.14	61210624	11832	3022	3651	1553	4109	6673	materialized
+1000000	116.00	448225280	148684	42821	40730	18396	48199	83551	materialized
+10000000	325.33	3348094976	1199544	340240	333031	109323	365420	673271	materialized

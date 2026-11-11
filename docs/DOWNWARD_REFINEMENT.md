@@ -110,6 +110,31 @@ checks, not a claim that the number of blocks stays constant after splitting.
 
 ## Scientific limits
 
+## Compact ancestry mode
+
+`run-tree --compact-ancestry` keeps the legacy upward reconciliation and direct
+child-to-parent edge runs, but does not eagerly materialize descendant leaf
+occurrences at internal nodes. Each internal checkpoint additionally contains
+`ancestry_links.tsv` (the immediate reconciliation components) and
+`boundary_events.tsv` (the parent block boundaries). `leaf_occurrences.tsv`
+remains present for schema compatibility and is empty at internal compact
+nodes. `--downward-refinement` records the compact boundary stage and does not
+run the legacy full-tree materialization.
+
+Use the query API or CLI to reconstruct only the requested descendants:
+
+```bash
+hal-multisynteny query-descendants --run-dir RUN --node NODE \
+  --block-id BLOCK_ID [--leaf LEAF] [--start START --end END]
+```
+
+The query streams direct edge TSV rows, projects only overlapping runs through
+the selected child branches, composes orientation, and never interpolates an
+unsupported gap. Legacy mode remains the default and is byte-compatible with
+prior checkpoint consumers. Compact mode is intended for VGP-scale storage and
+on-demand inspection; it does not by itself establish orthology, copy identity,
+or biological absence.
+
 `unique` remains a compatible machine status token and means **atomwise unique**:
 single projection per covered source atom. It does not establish biological
 uniqueness, copy correspondence, synteny chains or liftover transitivity. Missing

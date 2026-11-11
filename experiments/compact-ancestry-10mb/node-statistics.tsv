@@ -1,0 +1,4 @@
+node	input_left_blocks	input_right_blocks	atomic_blocks	final_upward_blocks	compact_downward_blocks	shared_consistent	left_only	right_only	ambiguous	duplication_conflict	orientation_conflict	order_conflict	complex	unaligned
+GCF_036370855.1	0	0	0	3022	3022	0	0	0	0	0	0	0	0	0
+GCF_036417845.1	0	0	0	3651	3651	0	0	0	0	0	0	0	0	0
+PalaeognathaeAnc3	340240	333031	365420	109323	109323	306908	32443	25630	0	390	0	0	49	0

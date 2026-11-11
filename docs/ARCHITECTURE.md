@@ -445,3 +445,9 @@ The persistent native index is deliberately separate from ordinary run
 checkpoints. It is an atomic SQLite artifact keyed by HAL identity and direct
 edge, with child/parent interval indexes and a completeness marker. Region
 analysis may reuse it, but whole-genome extraction behavior remains unchanged.
+
+Compact ancestry mode is an opt-in storage/query layer over the same upward
+reconciliation. Internal nodes retain direct edge runs and reconciliation
+components, while leaf descendants are reconstructed on demand by streaming
+only overlapping edge rows. Biological rules and checkpoint provenance remain
+unchanged; only descendant materialization timing changes.

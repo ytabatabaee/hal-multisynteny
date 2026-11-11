@@ -1,5 +1,6 @@
 """Ancestry-aware multi-genome synteny block construction."""
 
+from .ancestry import get_descendant_occurrences
 from .builder import BuildConfig, BuildResult, build_blocks
 from .models import (
     AlignmentRun,
@@ -29,6 +30,7 @@ __all__ = [
     "ReconcileResult",
     "UnmappedEdgeEvidence",
     "build_blocks",
+    "get_descendant_occurrences",
     "reconcile_node",
 ]
 

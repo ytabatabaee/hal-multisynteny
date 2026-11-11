@@ -211,3 +211,19 @@ covered-length and interval-union conservation true for Anc3 and both leaves.
 The 10-Mb target of 120 s and 4 GB RSS was not met. Downward refinement and
 checkpoint serialization dominate at this scale. Detailed tables and the VGP
 architecture assessment are in `experiments/scalability-10mb/REPORT.md`.
+
+## 2026-11-11 — compact ancestry mode
+
+Added opt-in `--compact-ancestry` storage with immediate ancestry links,
+streamed lazy descendant queries (`query-descendants`), and compact boundary
+metadata. Legacy eager leaf materialization remains the default; compact mode
+does not run the legacy downward materialization when `--downward-refinement`
+is supplied. Reverse-strand projection, selected-leaf pruning, gap handling,
+and exact equivalence with legacy leaf occurrences are covered by focused tests.
+
+Using the indexed Palaeognathae HAL and the two-leaf Anc3 subtree, compact
+100-kb/1-Mb/10-Mb runs completed in 93.14/116.00/325.33 s with peak RSS
+61 MB/448 MB/3.35 GB. The 10-Mb checkpoint has 109,323 Anc3 blocks and 673,271
+direct ancestry links, with zero eager internal leaf occurrences. Results and
+commands are in `experiments/compact-ancestry-10mb/REPORT.md`. These are
+engineering measurements, not genome-wide biological conclusions.
