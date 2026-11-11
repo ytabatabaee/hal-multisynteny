@@ -91,7 +91,13 @@ The experimental `hal-native-segments` backend uses the installed native
 `halAlignedExtract --viewParentCoords` utility in one batched process per
 direct child edge. It streams child/parent segment coordinates and strand into
 the existing `EdgeMappingRun` schema; missing intervals remain explicit
-unaligned evidence and multiple alternatives remain separate records. The
-environment contains the native executable but not HAL C++ development headers,
-so no standalone C++ helper is built or required. An explicit segment TSV is
-still supported for deterministic tests.
+unaligned evidence and multiple alternatives remain separate records. Leaf
+initialization and the first edge extraction share the same in-memory segment
+stream, so automatic native initialization does not rerun the command for the
+same child genome. The native CLI does not expose orthology, paralogy, or copy
+identity: a single emitted segment is therefore only coordinate-unique
+evidence, recorded with an unresolved-copy marker, and distinct target
+alternatives for one child block are marked ambiguous rather than assigned an
+invented copy ID. The environment contains the native executable but not HAL
+C++ development headers, so no standalone C++ helper is built or required. An
+explicit segment TSV is still supported for deterministic tests.

@@ -117,7 +117,8 @@ class ParentMappedRun:
                 self.current_edge_barrier_status == "duplicated"
             ))
         )
-        if not self.copy_id.strip() and not (unknown_psl_copy or self.synteny_chain_id):
+        native_unresolved_copy = self.raw_mapping_outcome.startswith("native_unresolved_copy")
+        if not self.copy_id.strip() and not (unknown_psl_copy or self.synteny_chain_id or native_unresolved_copy):
             empty.append("copy_id")
         if empty:
             raise ValueError(f"empty required field(s): {', '.join(empty)}")

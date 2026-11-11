@@ -42,6 +42,7 @@ def test_native_hal_aligned_extract_reads_real_tiny_segments():
     assert result.backend == "hal-native-segments"
     assert result.runs
     assert all(run.parent_start >= 0 and run.parent_end > run.parent_start for run in result.runs)
+    assert all(run.copy_id == "" and run.raw_mapping_outcome == "native_unresolved_copy" for run in result.runs)
 
 
 @pytest.mark.hal

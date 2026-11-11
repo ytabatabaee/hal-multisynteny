@@ -82,6 +82,14 @@ in 1.35 s wall / 0.83 s user / 0.38 s system; the root contained 4 atomic and
 4 final blocks with 40 supported bases. Peak-memory reporting was unavailable
 because macOS `time -l` could not query `kern.clockrate`.
 
+The hardening follow-up changed native extraction to line-streaming with a
+child-chromosome interval index (`O(S log S + B log B + K)` target) and a
+run-scoped cache shared by leaf initialization and edge extraction. Native HAL
+does not encode orthology/paralogy/copy identity; single segments are therefore
+coordinate-unique but biologically unresolved, while distinct target geometries
+for one child block are retained as ambiguous alternatives. This prevents the
+adapter from inventing copy IDs or silently collapsing duplications.
+
 Final validation with `.hal-env/bin` on `PATH`: 266 tests passed and 1 warning;
 Ruff passed. The existing portable-evidence regression also passed. Package
 build remains network-blocked while isolated Hatchling dependencies are fetched.

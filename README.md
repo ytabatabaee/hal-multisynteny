@@ -605,11 +605,14 @@ hal-multisynteny run-tree --backend hal-native-segments --leaf-init native \
 `hal-native-segments` uses the installed native `halAlignedExtract
 --viewParentCoords` utility in one batched process per edge and automatically
 initializes leaf homology units; an explicit `EdgeMappingRun` table remains
-available for deterministic tests. It preserves
-orientation, alternatives, copy IDs, and provenance without invoking
-halLiftover or halSynteny. Atomic intervals remain in checkpoints and each
-records its final parent block ID. This is an experimental engineering path,
-not a biological accuracy claim.
+available for deterministic tests. It preserves orientation, alternatives, and
+provenance without invoking halLiftover or halSynteny. Because this native CLI
+does not report orthology/paralogy or copy identity, records use an
+unresolved-copy marker and distinct target geometries are conservatively
+ambiguous rather than assigned invented copy IDs. Leaf seeding reuses the
+cached stream for its corresponding edge. Atomic intervals remain in
+checkpoints and each records its final parent block ID. This is an experimental
+engineering path, not a biological accuracy claim.
 
 The tiny-HAL validation is fixture-driven. Expected scientific outputs are in
 `tests/fixtures/tiny_hal/expected_results.json`, manually derived from the

@@ -405,4 +405,8 @@ The `hal-native-segments` backend uses native HAL's batched
 `EdgeMappingRun` records as the fixture adapter. It preserves direct parent
 coordinates, orientation, and unmapped evidence without invoking halLiftover or
 halSynteny. The installed environment has no HAL C++ headers, so a standalone
-C++ helper is unnecessary; the CLI is the reproducible native boundary.
+C++ helper is unnecessary; the CLI is the reproducible native boundary. The
+CLI has no orthology/paralogy field: native records carry unresolved-copy
+provenance, and multiple target geometries for one child block are retained as
+ambiguous alternatives rather than given synthetic copy IDs. Leaf seeding and
+the corresponding edge reuse one cached segment stream.
