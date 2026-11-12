@@ -1,0 +1,3 @@
+run	interval	processed_bases	native_segments	atomic_intervals	final_blocks	mean_bp	median_bp	n50_bp	max_bp	runtime_seconds	cpu_seconds	peak_rss_bytes	output_disk_bytes	status
+10mb_reference	0-10000000	10000000	673271	365420	35338	282.99	21	1012	90830	398.75	unknown	3158994944	1199276032	complete_reference
+30.375mb_secondary	0-30374959	30374959	2068360	1110803	112655	269.63	19	960	90830	884.39	771.00	9187463168	3707359232	complete_secondary

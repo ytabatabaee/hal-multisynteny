@@ -1,0 +1,29 @@
+{
+  "status": "secondary_interval_completed",
+  "requested_interval_bp": 100000000,
+  "constraint": "No PalaeognathaeAnc3 chromosome is at least 100 Mb.",
+  "selected_chromosome": "PalaeognathaeAnc3refChr301",
+  "selected_interval": "PalaeognathaeAnc3refChr301:0-30374959",
+  "selected_interval_bp": 30374959,
+  "hal": "data/cache/palaeognathae/PalaeognathaeAnc0.hal",
+  "hal_sha256": "33d29439caed203523fcb2435328a6fb9f0718d72e52c78f7142c84b406df831",
+  "commit": "3b331445a02cbde2f707355ce3ef833a8081b3bd",
+  "parent": "PalaeognathaeAnc3",
+  "children": ["GCF_036417845.1", "GCF_036370855.1"],
+  "native_index_dir": "/tmp/pal-indexes",
+  "runtime_seconds": 884.39,
+  "profile_wall_seconds": 857.5949217470043,
+  "peak_rss_bytes": 9187463168,
+  "output_disk_bytes_du_estimate": 3707359232,
+  "parameters": {
+    "backend": "hal-native-segments",
+    "leaf_init": "native",
+    "reconciliation_policy": "anchor-chaining",
+    "gap_tolerant": true,
+    "max_merge_gap": 1000,
+    "max_child_gap": 1000,
+    "min_block_length": 1,
+    "compact_ancestry": true,
+    "downward_refinement": false
+  }
+}

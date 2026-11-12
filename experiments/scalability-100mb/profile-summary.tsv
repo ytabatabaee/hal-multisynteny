@@ -1,0 +1,3 @@
+run	index_init_s	leaf_construction_s	native_extraction_s	atomic_classification_s	chaining_s	reconciliation_total_s	provenance_s	checkpoint_s	profile_wall_s	peak_rss_bytes
+10mb_reference	31.6104	45.1780	39.6521	41.9699	39.9196	137.1110	44.8333	67.1673	398.7522	3158994944
+30.375mb_secondary	41.9670	127.0444	128.4222	37.9465	41.4720	182.8994	82.9127	204.5191	857.5949	9187463168

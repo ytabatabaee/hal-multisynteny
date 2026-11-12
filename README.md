@@ -644,6 +644,12 @@ remain hard barriers. Accepted decisions record an anchor-chain score in
 `segment-chaining` policies are unchanged. The Palaeognathae benchmark is in
 [`experiments/anchor-chaining/REPORT.md`](experiments/anchor-chaining/REPORT.md).
 
+The largest-valid continuous scaling benchmark is documented in
+[`experiments/scalability-100mb/REPORT.md`](experiments/scalability-100mb/REPORT.md).
+Anc3 has no chromosome of 100 Mb; the reported secondary run covers the full
+30,374,959-bp `PalaeognathaeAnc3refChr301` chromosome without tiling or
+concatenation.
+
 Validated native indexes can be supplied to `run-tree` with
 `--native-index-dir`; bounded parent-coordinate analyses additionally use
 `--region-chrom`, `--region-start`, and `--region-end`. These options require a

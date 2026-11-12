@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="360" viewBox="0 0 760 360">
+  <rect width="760" height="360" fill="white"/>
+  <text x="30" y="28" font-family="sans-serif" font-size="18" font-weight="bold">Palaeognathae scaling: completed secondary interval</text>
+  <text x="30" y="50" font-family="sans-serif" font-size="12">30.375 Mb is the largest available Anc3 chromosome; no 100-Mb chromosome exists.</text>
+  <line x1="70" y1="300" x2="710" y2="300" stroke="#333"/>
+  <line x1="70" y1="70" x2="70" y2="300" stroke="#333"/>
+  <text x="25" y="305" font-family="sans-serif" font-size="11">0</text>
+  <text x="14" y="78" font-family="sans-serif" font-size="11">1,000</text>
+  <text x="20" y="188" font-family="sans-serif" font-size="11">500</text>
+  <text x="318" y="332" font-family="sans-serif" font-size="12">interval size (Mb)</text>
+  <rect x="150" y="209" width="100" height="91" fill="#4c78a8"/>
+  <rect x="510" y="97" width="100" height="203" fill="#f58518"/>
+  <text x="171" y="320" font-family="sans-serif" font-size="12">10</text>
+  <text x="529" y="320" font-family="sans-serif" font-size="12">30.375</text>
+  <text x="168" y="201" font-family="sans-serif" font-size="11">398.8 s</text>
+  <text x="526" y="89" font-family="sans-serif" font-size="11">884.4 s</text>
+  <text x="120" y="350" font-family="sans-serif" font-size="11">Runtime (seconds); bars are independently scaled to the 1,000-s axis.</text>
+</svg>

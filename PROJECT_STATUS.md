@@ -305,3 +305,21 @@ tree-aware pipeline, the native Method 3/anchor results must not be described
 as an end-to-end Method 1 comparison. Details are in
 `experiments/halsynteny-baseline/REPORT.md` and
 `docs/HALSYNTENY_BASELINE.md`.
+
+## 2026-11-12 — largest-valid continuous Palaeognathae scaling benchmark
+
+The requested 100-Mb single-chromosome Anc3 interval was not available:
+`halStats --chromSizes PalaeognathaeAnc3` shows the largest chromosome,
+`PalaeognathaeAnc3refChr301`, is 30,374,959 bp. No chromosomes were
+concatenated. Using the validated native indexes and unchanged
+anchor-chaining/compact-ancestry settings, the largest valid continuous
+secondary run (`0-30374959`) completed in 884.39 s with 9.19 GB peak RSS and
+3.71 GB output disk usage. It produced 2,068,360 native mappings, 1,110,803
+atomic intervals, and 112,655 final blocks; the median block span remained 19
+bp and N50 was 960 bp.
+
+Compared with the completed 10-Mb reference, runtime was 2.22x, RSS 2.91x,
+and output size 3.09x for 3.04x more sequence. This is a two-point,
+single-chromosome engineering measurement, not a whole-genome or 100-Mb
+result. Details and compact tables are in `experiments/scalability-100mb/`;
+the multi-GB checkpoints remain under `/tmp` and are not committed.
